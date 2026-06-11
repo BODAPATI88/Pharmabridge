@@ -1,0 +1,167 @@
+# pharmabridge/k8s/cleanup-cronjob.yaml
+# ─────────────────────────────────────────────────────────────────
+# Two CronJobs for operational hygiene:
+#
+# 1. upload-reaper          Daily at 3:00 AM IST
+#    Deletes UPLOADED prescriptions older than 24 hours.
+#    Frees MinIO storage and prevents orphan DB rows accumulating.
+#
+# 2. lock-expiry-janitor    Every 15 minutes
+#    Finds UNDER_REVIEW prescriptions whose active OperatorSession
+#    has expired_at < now() and resets them to PENDING_REVIEW.
+#    This is a safety net; the claim endpoint already handles this
+#    inline, but the janitor catches prescriptions no one has tried
+#    to re-claim yet.
+# ─────────────────────────────────────────────────────────────────
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: upload-reaper
+  namespace: pharmabridge
+  labels:
+    app: upload-reaper
+    app.kubernetes.io/component: maintenance
+spec:
+  schedule: "30 21 * * *"       # 3:00 AM IST = 21:30 UTC previous day
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 1800   # kill if takes > 30 min
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: reaper
+              image: bodapati88/pharmabridge-gateway:latest
+              command: ["python", "cleanup_uploads.py"]
+              envFrom:
+                - configMapRef:
+                    name: pharmabridge-config
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: pharmabridge-db-secret
+                      key: DATABASE_URL
+                - name: MINIO_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: pharmabridge-minio-secret
+                      key: MINIO_ROOT_USER
+                - name: MINIO_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: pharmabridge-minio-secret
+                      key: MINIO_ROOT_PASSWORD
+                - name: UPLOAD_ABANDON_HOURS
+                  value: "24"
+                - name: DRY_RUN
+                  value: "false"   # set to "true" for a test run
+              resources:
+                requests:
+                  cpu:    "100m"
+                  memory: "128Mi"
+                limits:
+                  cpu:    "500m"
+                  memory: "256Mi"
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: lock-expiry-janitor
+  namespace: pharmabridge
+  labels:
+    app: lock-expiry-janitor
+    app.kubernetes.io/component: maintenance
+spec:
+  schedule: "*/15 * * * *"    # Every 15 minutes
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 300   # kill if takes > 5 min
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: janitor
+              image: bodapati88/pharmabridge-gateway:latest
+              command:
+                - python
+                - -c
+                - |
+                  import asyncio, sys
+                  sys.path.insert(0, '/app')
+                  sys.path.insert(0, '/app/..')
+
+                  from datetime import datetime, timezone
+                  from sqlalchemy import select, update
+                  from db.session import db_session
+                  from db.orm_models import OperatorSession, Prescription, PrescriptionAudit
+
+                  async def run():
+                      now = datetime.now(timezone.utc)
+                      async with db_session() as db:
+                          # Find expired active sessions
+                          result = await db.execute(
+                              select(OperatorSession).where(
+                                  OperatorSession.is_active  == True,
+                                  OperatorSession.expires_at <  now,
+                              )
+                          )
+                          expired = result.scalars().all()
+
+                          for session in expired:
+                              # Expire the lock
+                              session.is_active   = False
+                              session.released_at = now
+                              await db.flush()
+
+                              # Reset prescription to PENDING_REVIEW
+                              presc = await db.get(Prescription, session.prescription_id)
+                              if presc and presc.verification_status == "UNDER_REVIEW":
+                                  presc.verification_status = "PENDING_REVIEW"
+                                  presc.reviewer_id         = None
+                                  presc.review_started_at   = None
+                                  await db.flush()
+
+                                  # Audit event
+                                  db.add(PrescriptionAudit(
+                                      prescription_id = presc.id,
+                                      actor_id        = None,
+                                      actor_role      = "system",
+                                      event_type      = "LOCK_EXPIRED",
+                                      from_status     = "UNDER_REVIEW",
+                                      to_status       = "PENDING_REVIEW",
+                                      notes           = f"Lock expired at {now.isoformat()}",
+                                  ))
+                                  await db.flush()
+                                  print(f"Lock expired: prescription={presc.id[:8]} operator={session.operator_id[:8]}")
+
+                          print(f"Janitor complete: {len(expired)} lock(s) expired.")
+
+                  asyncio.run(run())
+              envFrom:
+                - configMapRef:
+                    name: pharmabridge-config
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: pharmabridge-db-secret
+                      key: DATABASE_URL
+              resources:
+                requests:
+                  cpu:    "50m"
+                  memory: "64Mi"
+                limits:
+                  cpu:    "200m"
+                  memory: "128Mi"

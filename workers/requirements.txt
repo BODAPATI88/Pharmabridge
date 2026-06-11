@@ -1,0 +1,24 @@
+# pharmabridge/workers/requirements.txt
+# ──────────────────────────────────────
+# Python 3.11 · async worker layer
+
+# Redis client
+redis[hiredis]==5.0.*
+
+# HTTP client (PharmEasy API + Netmeds HTML fetch)
+httpx==0.27.*
+
+# HTML parsing (Netmeds worker)
+beautifulsoup4==4.12.*
+lxml==5.2.*            # Faster BS4 parser for large HTML pages
+
+# Playwright (1mg worker – headless Chromium)
+# playwright install chromium  must also be run during image build
+playwright==1.44.*
+
+# Pydantic (shared with gateway via PYTHONPATH mount)
+pydantic==2.7.*
+orjson==3.10.*
+
+# Logging
+structlog==24.*

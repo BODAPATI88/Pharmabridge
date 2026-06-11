@@ -1,0 +1,1674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PharmaBridge — Unified Pharmacy Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f7f9fc;
+  --white: #ffffff;
+  --surface: #f0f4f8;
+  --border: #e2e8f0;
+  --border2: #cbd5e1;
+  --primary: #0d6efd;
+  --primary-dark: #0a58ca;
+  --primary-light: #e8f0fe;
+  --green: #10b981;
+  --green-light: #d1fae5;
+  --red: #ef4444;
+  --red-light: #fee2e2;
+  --orange: #f59e0b;
+  --orange-light: #fef3c7;
+  --purple: #8b5cf6;
+  --purple-light: #ede9fe;
+  --text: #0f172a;
+  --text2: #475569;
+  --text3: #94a3b8;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Outfit', sans-serif;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.10);
+  --shadow-lg: 0 10px 40px rgba(0,0,0,0.12);
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ===== LAYOUT ===== */
+.app { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ===== TOPBAR ===== */
+.topbar {
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--shadow);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.logo-icon {
+  width: 32px; height: 32px;
+  background: var(--primary);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-size: 16px;
+}
+
+.logo-sub { font-size: 11px; font-weight: 400; color: var(--text3); letter-spacing: 0.05em; font-family: var(--mono); margin-top: 1px; }
+
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+
+.location-badge {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--primary-light);
+  color: var(--primary);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-size: 12px; font-weight: 600;
+}
+
+/* ===== NAV ===== */
+.nav {
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+}
+
+.nav-item {
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text2);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: all 0.15s;
+  display: flex; align-items: center; gap: 6px;
+}
+
+.nav-item:hover { color: var(--primary); }
+.nav-item.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+.nav-badge {
+  background: var(--red);
+  color: white;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 10px;
+  font-family: var(--mono);
+}
+
+/* ===== PAGES ===== */
+.page { display: none; }
+.page.active { display: block; }
+
+.main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+
+/* ===== UPLOAD PAGE ===== */
+.upload-hero {
+  text-align: center;
+  padding: 40px 20px 32px;
+}
+
+.upload-hero h1 {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 10px;
+}
+
+.upload-hero h1 span { color: var(--primary); }
+
+.upload-hero p { color: var(--text2); font-size: 15px; max-width: 520px; margin: 0 auto 28px; }
+
+.upload-zone {
+  border: 2px dashed var(--border2);
+  border-radius: var(--radius);
+  padding: 48px 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--white);
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-zone:hover, .upload-zone.drag-over {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.upload-icon {
+  width: 64px; height: 64px;
+  background: var(--primary-light);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px;
+  margin: 0 auto 16px;
+}
+
+.upload-zone h3 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+.upload-zone p { color: var(--text2); font-size: 13px; }
+
+.upload-or {
+  display: flex; align-items: center; gap: 12px;
+  margin: 24px 0;
+  color: var(--text3);
+  font-size: 12px;
+}
+.upload-or::before, .upload-or::after {
+  content: ''; flex: 1;
+  height: 1px; background: var(--border);
+}
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+}
+
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(13,110,253,0.3); }
+
+.btn-outline { background: white; color: var(--text); border: 1px solid var(--border2); }
+.btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+
+.btn-green { background: var(--green); color: white; }
+.btn-green:hover { background: #0ea271; transform: translateY(-1px); }
+
+.btn-lg { padding: 14px 28px; font-size: 15px; border-radius: 10px; }
+.btn-full { width: 100%; justify-content: center; }
+
+/* Demo prescription card */
+.demo-rx-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-top: 24px;
+  text-align: left;
+  box-shadow: var(--shadow);
+}
+
+.demo-rx-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rx-doc-info { display: flex; align-items: center; gap: 12px; }
+.rx-doc-avatar {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-size: 18px;
+}
+
+.rx-doc-name { font-weight: 700; font-size: 14px; }
+.rx-doc-sub { font-size: 12px; color: var(--text2); }
+
+.rx-status {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--green-light);
+  color: var(--green);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.rx-meds { display: flex; flex-direction: column; gap: 8px; }
+
+.rx-med-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+}
+
+.rx-med-name { font-weight: 600; font-size: 13px; }
+.rx-med-dosage { font-size: 12px; color: var(--text2); margin-top: 1px; }
+.rx-med-qty {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text3);
+  background: var(--white);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* Steps indicator */
+.steps-bar {
+  display: flex; align-items: center;
+  gap: 0;
+  margin: 28px 0;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 40px;
+  padding: 6px 8px;
+  width: fit-content;
+  margin: 28px auto;
+  box-shadow: var(--shadow);
+}
+
+.step-dot {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
+  border-radius: 30px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text3);
+  transition: all 0.3s;
+}
+
+.step-dot.done { color: var(--green); }
+.step-dot.active { background: var(--primary); color: white; }
+.step-dot .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.step-arrow { color: var(--text3); font-size: 12px; padding: 0 2px; }
+
+/* ===== SEARCH / COMPARE PAGE ===== */
+.compare-header {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+
+.compare-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.compare-sub { font-size: 13px; color: var(--text2); }
+
+.filters-row {
+  display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;
+}
+
+.filter-chip {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--text2);
+  transition: all 0.15s;
+}
+.filter-chip:hover, .filter-chip.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+/* Medicine results */
+.med-section { margin-bottom: 28px; }
+
+.med-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.med-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.vendor-cards { display: flex; flex-direction: column; gap: 10px; }
+
+.vendor-card {
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: all 0.15s;
+  cursor: pointer;
+  position: relative;
+}
+
+.vendor-card:hover { border-color: var(--primary); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.vendor-card.selected { border-color: var(--primary); background: var(--primary-light); }
+.vendor-card.best-value { border-color: var(--green); }
+
+.best-badge {
+  position: absolute;
+  top: -8px; right: 12px;
+  background: var(--green);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.vendor-logo {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.vendor-info { flex: 1; min-width: 0; }
+.vendor-name { font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.vendor-meta { font-size: 12px; color: var(--text2); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.vendor-meta span { display: flex; align-items: center; gap: 3px; }
+
+.vendor-price-col { text-align: right; flex-shrink: 0; }
+.vendor-price { font-size: 20px; font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
+.vendor-price .currency { font-size: 13px; font-weight: 500; color: var(--text2); }
+.vendor-mrp { font-size: 11px; color: var(--text3); text-decoration: line-through; }
+.vendor-discount { font-size: 11px; color: var(--green); font-weight: 600; }
+
+.vendor-action { flex-shrink: 0; }
+
+.stock-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.stock-dot.in { background: var(--green); }
+.stock-dot.out { background: var(--red); }
+.stock-dot.low { background: var(--orange); }
+
+/* Local pharmacy row */
+.local-badge {
+  background: var(--orange-light);
+  color: var(--orange);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+/* ===== SUMMARY / CART PAGE ===== */
+.order-summary {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .order-summary { grid-template-columns: 1fr; }
+  .topbar { padding: 0 16px; }
+  .main { padding: 16px; }
+}
+
+.order-items {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.order-items-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 15px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.order-item-row {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 14px;
+}
+
+.order-item-row:last-child { border-bottom: none; }
+
+.order-item-icon {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.order-item-details { flex: 1; }
+.order-item-name { font-weight: 600; font-size: 14px; }
+.order-item-from { font-size: 11px; color: var(--text3); margin-top: 1px; }
+
+.order-item-price { font-weight: 700; font-size: 15px; }
+.order-item-savings { font-size: 11px; color: var(--green); margin-top: 1px; text-align: right; }
+
+/* Bill card */
+.bill-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  position: sticky;
+  top: 80px;
+}
+
+.bill-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 14px;
+  background: var(--surface);
+}
+
+.bill-rows { padding: 16px 20px; }
+
+.bill-row {
+  display: flex; justify-content: space-between;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--text2);
+}
+
+.bill-row.total {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text);
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 14px;
+}
+
+.bill-row.savings {
+  color: var(--green);
+  font-weight: 600;
+  background: var(--green-light);
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin: 8px 0;
+}
+
+.split-info {
+  padding: 12px 16px;
+  background: var(--primary-light);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--primary);
+  margin: 12px 20px;
+  display: flex; gap: 8px; align-items: flex-start;
+}
+
+.delivery-options { padding: 16px 20px; border-top: 1px solid var(--border); }
+.delivery-opt {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: all 0.15s;
+}
+.delivery-opt:last-child { margin-bottom: 0; }
+.delivery-opt.selected { border-color: var(--primary); background: var(--primary-light); }
+.delivery-opt-icon { font-size: 18px; }
+.delivery-opt-title { font-weight: 600; font-size: 13px; }
+.delivery-opt-sub { font-size: 11px; color: var(--text2); }
+.delivery-opt-price { margin-left: auto; font-weight: 700; font-size: 13px; }
+
+/* ===== TRACKING PAGE ===== */
+.tracking-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  max-width: 600px;
+  margin: 0 auto;
+  box-shadow: var(--shadow-md);
+}
+
+.tracking-id {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text3);
+  margin-bottom: 4px;
+}
+
+.tracking-title { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+.tracking-sub { font-size: 13px; color: var(--text2); margin-bottom: 24px; }
+
+.track-steps { display: flex; flex-direction: column; gap: 0; }
+
+.track-step {
+  display: flex; gap: 16px;
+  position: relative;
+}
+
+.track-step-left { display: flex; flex-direction: column; align-items: center; }
+
+.track-circle {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  background: var(--white);
+  z-index: 1;
+  flex-shrink: 0;
+  transition: all 0.3s;
+}
+
+.track-circle.done { border-color: var(--green); background: var(--green); color: white; }
+.track-circle.active { border-color: var(--primary); background: var(--primary-light); color: var(--primary); animation: pulse-ring 1.5s infinite; }
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(13,110,253,0.3); }
+  70% { box-shadow: 0 0 0 8px rgba(13,110,253,0); }
+  100% { box-shadow: 0 0 0 0 rgba(13,110,253,0); }
+}
+
+.track-line {
+  width: 2px;
+  flex: 1;
+  min-height: 32px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.track-line.done { background: var(--green); }
+
+.track-content { flex: 1; padding: 4px 0 24px; }
+.track-step-title { font-weight: 700; font-size: 14px; }
+.track-step-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.track-step-time { font-size: 11px; color: var(--text3); font-family: var(--mono); margin-top: 4px; }
+
+/* Map placeholder */
+.map-box {
+  background: linear-gradient(135deg, #e0f2fe 0%, #ddd6fe 100%);
+  border-radius: var(--radius);
+  height: 180px;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  margin: 20px 0;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text2);
+  position: relative;
+  overflow: hidden;
+}
+
+.map-pin {
+  position: absolute;
+  font-size: 28px;
+  animation: float 2s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+/* ===== LOADING ANIMATION ===== */
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.95);
+  backdrop-filter: blur(4px);
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.loading-screen.hidden { display: none; }
+
+.loading-dots {
+  display: flex; gap: 8px;
+}
+
+.loading-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: bounce 1.2s ease-in-out infinite;
+}
+.loading-dot:nth-child(2) { animation-delay: 0.2s; background: var(--purple); }
+.loading-dot:nth-child(3) { animation-delay: 0.4s; background: var(--green); }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.loading-title { font-weight: 700; font-size: 16px; color: var(--text); }
+.loading-sub { font-size: 13px; color: var(--text2); }
+
+.loading-progress {
+  width: 240px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.loading-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--purple));
+  border-radius: 2px;
+  animation: progress 2.5s ease-out forwards;
+}
+
+@keyframes progress {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+/* ===== NOTIFICATION TOAST ===== */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--text);
+  color: white;
+  padding: 12px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--shadow-lg);
+  z-index: 200;
+  display: flex; align-items: center; gap: 8px;
+  transform: translateY(100px);
+  opacity: 0;
+  transition: all 0.3s;
+  max-width: 300px;
+}
+
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { background: var(--green); }
+.toast.info { background: var(--primary); }
+
+/* ===== MISC ===== */
+.tag-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.tag {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.tag-blue { background: var(--primary-light); color: var(--primary); }
+.tag-green { background: var(--green-light); color: var(--green); }
+.tag-orange { background: var(--orange-light); color: var(--orange); }
+.tag-purple { background: var(--purple-light); color: var(--purple); }
+
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text3);
+}
+.empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+.empty-state p { font-size: 14px; }
+
+/* Section title */
+.section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.section-title { font-size: 16px; font-weight: 700; }
+.section-link { font-size: 12px; color: var(--primary); cursor: pointer; font-weight: 500; }
+
+/* Summary metric chips */
+.metric-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.metric-chip {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 16px;
+  flex: 1; min-width: 100px;
+  box-shadow: var(--shadow);
+}
+.metric-val { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 2px; }
+.metric-label { font-size: 11px; color: var(--text3); font-weight: 500; }
+
+/* Radio hidden */
+input[type=radio] { display: none; }
+
+/* ===== PHARMACY MAP SECTION ===== */
+.pharmacy-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.pharmacy-row {
+  display: flex; align-items: center;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  gap: 12px;
+  transition: all 0.15s;
+}
+.pharmacy-row:hover { border-color: var(--primary); }
+.pharma-icon { font-size: 22px; flex-shrink: 0; }
+.pharma-name { font-weight: 600; font-size: 13px; }
+.pharma-dist { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+.pharma-avail { margin-left: auto; font-size: 11px; font-weight: 600; }
+
+/* Input */
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--white);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.input:focus { border-color: var(--primary); }
+
+/* Animation: fade in cards */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-up { animation: fadeUp 0.35s ease forwards; }
+.fade-up:nth-child(2) { animation-delay: 0.05s; }
+.fade-up:nth-child(3) { animation-delay: 0.1s; }
+.fade-up:nth-child(4) { animation-delay: 0.15s; }
+
+.checking-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--orange-light);
+  color: var(--orange);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.spinner {
+  width: 10px; height: 10px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+</style>
+</head>
+<body>
+
+<!-- LOADING SCREEN -->
+<div class="loading-screen" id="loadingScreen">
+  <div style="font-size:36px;">💊</div>
+  <div class="loading-dots">
+    <div class="loading-dot"></div>
+    <div class="loading-dot"></div>
+    <div class="loading-dot"></div>
+  </div>
+  <div class="loading-title">PharmaBridge</div>
+  <div class="loading-sub">Checking 6 platforms near you…</div>
+  <div class="loading-progress"><div class="loading-bar"></div></div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- APP -->
+<div class="app">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-icon">💊</div>
+      <div>
+        PharmaBridge
+        <div class="logo-sub">UNIFIED PHARMACY</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="location-badge" onclick="showToast('📍 Hyderabad, Banjara Hills', 'info')">
+        📍 Banjara Hills, HYD
+      </div>
+      <div class="avatar">RK</div>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <div class="nav">
+    <div class="nav-item active" onclick="goTo('upload', this)">📋 Upload Rx</div>
+    <div class="nav-item" onclick="goTo('compare', this)">⚖️ Compare & Order</div>
+    <div class="nav-item" onclick="goTo('cart', this)">🛒 Order Summary <span class="nav-badge" id="cartBadge">3</span></div>
+    <div class="nav-item" onclick="goTo('track', this)">🚚 Track Order</div>
+    <div class="nav-item" onclick="goTo('history', this)">📁 History</div>
+  </div>
+
+  <!-- ==================== PAGE: UPLOAD ==================== -->
+  <div class="page active" id="page-upload">
+    <div class="main">
+
+      <div class="upload-hero">
+        <h1>Upload Your <span>Prescription</span></h1>
+        <p>We'll scan it, verify it, and find the best prices across 6 platforms + 12 local pharmacies near you.</p>
+
+        <div class="steps-bar">
+          <div class="step-dot active"><span class="dot"></span> Upload</div>
+          <div class="step-arrow">›</div>
+          <div class="step-dot"><span class="dot"></span> Verify</div>
+          <div class="step-arrow">›</div>
+          <div class="step-dot"><span class="dot"></span> Compare</div>
+          <div class="step-arrow">›</div>
+          <div class="step-dot"><span class="dot"></span> Order</div>
+        </div>
+      </div>
+
+      <div class="upload-zone" id="uploadZone" onclick="handleUpload()">
+        <div class="upload-icon">📄</div>
+        <h3>Drop prescription here</h3>
+        <p>JPG, PNG, PDF · Max 10MB</p>
+        <p style="margin-top:6px;font-size:12px;color:var(--text3);">Prescription will be verified by a licensed pharmacist</p>
+      </div>
+
+      <div class="upload-or">OR USE DEMO PRESCRIPTION</div>
+
+      <button class="btn btn-outline btn-full" onclick="loadDemoRx()" style="margin-bottom:20px;">
+        🧪 Load Sample Prescription
+      </button>
+
+      <!-- DEMO RX (hidden initially) -->
+      <div class="demo-rx-card" id="demoRxCard" style="display:none;">
+        <div class="demo-rx-header">
+          <div class="rx-doc-info">
+            <div class="rx-doc-avatar">👨‍⚕️</div>
+            <div>
+              <div class="rx-doc-name">Dr. Rajesh Kumar, MD</div>
+              <div class="rx-doc-sub">Internal Medicine · Apollo Hospital, HYD · Reg. No. AP-45821</div>
+            </div>
+          </div>
+          <div class="rx-status">✓ Verified</div>
+        </div>
+
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;font-family:var(--mono);">
+          Patient: Ravi K. · Age: 32 · Date: 04-Jun-2026
+        </div>
+
+        <div class="rx-meds">
+          <div class="rx-med-row fade-up">
+            <div class="rx-med-icon" style="font-size:20px;width:32px;text-align:center;">💊</div>
+            <div style="flex:1">
+              <div class="rx-med-name">Metformin 500mg</div>
+              <div class="rx-med-dosage">1-0-1 after meals · 30 days</div>
+            </div>
+            <div class="rx-med-qty">Qty: 60</div>
+          </div>
+          <div class="rx-med-row fade-up">
+            <div class="rx-med-icon" style="font-size:20px;width:32px;text-align:center;">💊</div>
+            <div style="flex:1">
+              <div class="rx-med-name">Telmisartan 40mg</div>
+              <div class="rx-med-dosage">0-0-1 before dinner · 30 days</div>
+            </div>
+            <div class="rx-med-qty">Qty: 30</div>
+          </div>
+          <div class="rx-med-row fade-up">
+            <div class="rx-med-icon" style="font-size:20px;width:32px;text-align:center;">💊</div>
+            <div style="flex:1">
+              <div class="rx-med-name">Atorvastatin 10mg</div>
+              <div class="rx-med-dosage">0-0-1 at bedtime · 30 days</div>
+            </div>
+            <div class="rx-med-qty">Qty: 30</div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:gap;">
+          <div class="tag-row">
+            <span class="tag tag-blue">Chronic Rx</span>
+            <span class="tag tag-orange">Schedule H</span>
+            <span class="tag tag-green">Pharmacist Reviewed</span>
+          </div>
+          <button class="btn btn-primary" onclick="goTo('compare', document.querySelectorAll('.nav-item')[1])" style="margin-top:8px;">
+            Find Best Prices →
+          </button>
+        </div>
+      </div>
+
+      <!-- Nearby pharmacies quick view -->
+      <div style="margin-top:28px;">
+        <div class="section-header">
+          <div class="section-title">📍 Searching Near You</div>
+          <div class="section-link">View Map</div>
+        </div>
+        <div class="pharmacy-list">
+          <div class="pharmacy-row fade-up">
+            <div class="pharma-icon">🏥</div>
+            <div>
+              <div class="pharma-name">PharmEasy (Online)</div>
+              <div class="pharma-dist">Digital · 15–30 min delivery</div>
+            </div>
+            <div class="pharma-avail" style="color:var(--green);">✓ All 3 in stock</div>
+          </div>
+          <div class="pharmacy-row fade-up">
+            <div class="pharma-icon">🏥</div>
+            <div>
+              <div class="pharma-name">1mg (Online)</div>
+              <div class="pharma-dist">Digital · 20–40 min delivery</div>
+            </div>
+            <div class="pharma-avail" style="color:var(--green);">✓ All 3 in stock</div>
+          </div>
+          <div class="pharmacy-row fade-up">
+            <div class="pharma-icon">🏪</div>
+            <div>
+              <div class="pharma-name">Sai Medical Store</div>
+              <div class="pharma-dist">1.2 km · Road No. 12, BH</div>
+            </div>
+            <div class="pharma-avail" style="color:var(--green);">✓ All 3 in stock</div>
+          </div>
+          <div class="pharmacy-row fade-up">
+            <div class="pharma-icon">🏪</div>
+            <div>
+              <div class="pharma-name">Apollo Pharmacy</div>
+              <div class="pharma-dist">2.1 km · Road No. 36, JH</div>
+            </div>
+            <div class="pharma-avail" style="color:var(--orange);">⚠ 2/3 in stock</div>
+          </div>
+          <div class="pharmacy-row fade-up">
+            <div class="pharma-icon">🏪</div>
+            <div>
+              <div class="pharma-name">Medplus Madhapur</div>
+              <div class="pharma-dist">3.4 km · Hitech City Rd</div>
+            </div>
+            <div class="pharma-avail" style="color:var(--green);">✓ All 3 in stock</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==================== PAGE: COMPARE ==================== -->
+  <div class="page" id="page-compare">
+    <div class="main">
+
+      <div class="compare-header">
+        <div class="compare-title">⚖️ Price Comparison — 3 Medicines</div>
+        <div class="compare-sub">Checked 6 platforms + 5 local pharmacies near Banjara Hills</div>
+        <div class="filters-row">
+          <div class="filter-chip active" onclick="toggleFilter(this)">All</div>
+          <div class="filter-chip" onclick="toggleFilter(this)">💻 Online Only</div>
+          <div class="filter-chip" onclick="toggleFilter(this)">🏪 Local Only</div>
+          <div class="filter-chip" onclick="toggleFilter(this)">🚀 Fast Delivery</div>
+          <div class="filter-chip" onclick="toggleFilter(this)">🏷️ Lowest Price</div>
+          <div class="filter-chip" onclick="toggleFilter(this)">🔄 Generics</div>
+        </div>
+      </div>
+
+      <!-- MED 1 -->
+      <div class="med-section">
+        <div class="med-section-title">💊 Metformin 500mg × 60 tabs</div>
+        <div class="vendor-cards">
+
+          <div class="vendor-card best-value fade-up" onclick="selectVendor(this)">
+            <div class="best-badge">BEST VALUE</div>
+            <div class="vendor-logo" style="background:#fff3e0;">🟠</div>
+            <div class="vendor-info">
+              <div class="vendor-name">1mg</div>
+              <div class="vendor-meta">
+                <span><span class="stock-dot in"></span> In Stock</span>
+                <span>⚡ 25 min</span>
+                <span>⭐ 4.7</span>
+                <span class="tag tag-green">Generic Available</span>
+              </div>
+            </div>
+            <div class="vendor-price-col">
+              <div class="vendor-price"><span class="currency">₹</span>48</div>
+              <div class="vendor-mrp">MRP ₹72</div>
+              <div class="vendor-discount">33% off</div>
+            </div>
+            <div class="vendor-action">
+              <button class="btn btn-green" style="font-size:12px;padding:7px 14px;">Select</button>
+            </div>
+          </div>
+
+          <div class="vendor-card fade-up" onclick="selectVendor(this)">
+            <div class="vendor-logo" style="background:#e8f5e9;">🟢</div>
+            <div class="vendor-info">
+              <div class="vendor-name">PharmEasy</div>
+              <div class="vendor-meta">
+                <span><span class="stock-dot in"></span> In Stock</span>
+                <span>⚡ 18 min</span>
+                <span>⭐ 4.5</span>
+              </div>
+            </div>
+            <div class="vendor-price-col">
+              <div class="vendor-price"><span class="currency">₹</span>55</div>
+              <div class="vendor-mrp">MRP ₹72</div>
+              <div class="vendor-discount">24% off</div>
+            </div>
+            <div class="vendor-action">
+              <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;">Select</button>
+            </div>
+          </div>
+
+          <div class="vendor-card fade-up" onclick="selectVendor(this)">
+            <div class="vendor-logo" style="background:#fce4ec;">🏪</div>
+            <div class="vendor-info">
+              <div class="vendor-name">Sai Medical Store <span class="local-badge">LOCAL</span></div>
+              <div class="vendor-meta">
+                <span><span class="stock-dot in"></span> In Stock</span>
+                <span>📍 1.2 km</span>
+                <span>🚶 15 min walk</span>
+              </div>
+            </div>
+            <div class="vendor-price-col">
+              <div class="vendor-price"><span class="currency">₹</span>65</div>
+              <div class="vendor-mrp">MRP ₹72</div>
+              <div class="vendor-discount">10% off</div>
+            </div>
+            <div class="vendor-action">
+              <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;">Select</button>
+            </div>
+          </div>
+
+          <div class="vendor-card fade-up" style="opacity:0.6;">
+            <div class="vendor-logo" style="background:#f5f5f5;">🔵</div>
+            <div class="vendor-info">
+              <div class="vendor-name">Netmeds</div>
+              <div class="vendor-meta">
+                <span><span class="stock-dot out"></span> Out of Stock</span>
+                <span>Next available: 2 days</span>
+              </div>
+            </div>
+            <div class="vendor-price-col">
+              <div class="vendor-price" style="color:var(--text3)"><span class="currency">₹</span>—</div>
+            </div>
+            <div class="vendor-action">
+              <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;" disabled>N/A</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- MED 2 -->
+      <div class="med-section">
+        <div class="med-section-title">💊 Telmisartan 40mg × 30 tabs</div>
+        <div class="vendor-cards">
+
+          <div class="vendor-card best-value fade-up" onclick="selectVendor(this)">
+            <div class="best-badge">BEST VALUE</div>
+            <div class="vendor-logo" style="background:#e8f5e9;">🟢</div>
+            <div class="vendor-info">
+              <div class="vendor-name">PharmEasy</div>
+              <div class="vendor-meta">
+                <span><span class="stock-dot in"></span> In Stock</span>
+                <span>⚡ 18 min</span>
+                <span>⭐ 4.5</span>
+              </div>
+            </div>
+            <div class="vendor-price-col">
+              <div class="vendor-price"><span class="currency">₹</span>92</div>
+              <div class="vendor-mrp">MRP ₹135</div>
+              <div class="vendor-discount">32% off</div>
+            </div>
+            <div class="vendor-action">
+              <button class="btn btn-green" style="font-size:12px;padding:7px 14px;">Select</button>
+            </div>
+          </div>
+
+          <div class="vendor-card fade-up" onclick="selectVendor(this)">
+            <div class="vendor-logo" style="background:#fff3e0;">🟠</div>
+            <div class="vendor-info">
+              <div class="vendor-name">1mg</div>
+              <div class="vendor-meta">
+                <span><span class="stock-dot in"></span> In Stock</span>
+                <span>⚡ 25 min</span>
+                <span>⭐ 4.7</span>
+              </div>
+            </div>
+            <div class="vendor-price-col">
+              <div class="vendor-price"><span class="currency">₹</span>108</div>
+              <div class="vendor-mrp">MRP ₹135</div>
+              <div class="vendor-discount">20% off</div>
+            </div>
+            <div class="vendor-action">
+              <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;">Select</button>
+            </div>
+          </div>
+
+          <div class="vendor-card fade-up" onclick="selectVendor(this)">
+            <div class="vendor-logo" style="background:#fce4ec;">🏪</div>
+            <div class="vendor-info">
+              <div class="vendor-name">Medplus Madhapur <span class="local-badge">LOCAL</span></div>
+              <div class="vendor-meta">
+                <span><span class="stock-dot in"></span> In Stock</span>
+                <span>📍 3.4 km</span>
+                <span>🛵 20 min</span>
+              </div>
+            </div>
+            <div class="vendor-price-col">
+              <div class="vendor-price"><span class="currency">₹</span>119</div>
+              <div class="vendor-mrp">MRP ₹135</div>
+              <div class="vendor-discount">12% off</div>
+            </div>
+            <div class="vendor-action">
+              <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;">Select</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- MED 3 -->
+      <div class="med-section">
+        <div class="med-section-title">💊 Atorvastatin 10mg × 30 tabs</div>
+        <div class="vendor-cards">
+
+          <div class="vendor-card best-value fade-up" onclick="selectVendor(this)">
+            <div class="best-badge">BEST VALUE</div>
+            <div class="vendor-logo" style="background:#e8f5e9;">🟢</div>
+            <div class="vendor-info">
+              <div class="vendor-name">PharmEasy</div>
+              <div class="vendor-meta">
+                <span><span class="stock-dot in"></span> In Stock</span>
+                <span>⚡ 18 min</span>
+                <span>⭐ 4.5</span>
+                <span class="tag tag-green">Generic Available</span>
+              </div>
+            </div>
+            <div class="vendor-price-col">
+              <div class="vendor-price"><span class="currency">₹</span>62</div>
+              <div class="vendor-mrp">MRP ₹88</div>
+              <div class="vendor-discount">30% off</div>
+            </div>
+            <div class="vendor-action">
+              <button class="btn btn-green" style="font-size:12px;padding:7px 14px;">Select</button>
+            </div>
+          </div>
+
+          <div class="vendor-card fade-up" onclick="selectVendor(this)">
+            <div class="vendor-logo" style="background:#fff3e0;">🟠</div>
+            <div class="vendor-info">
+              <div class="vendor-name">1mg</div>
+              <div class="vendor-meta">
+                <span><span class="stock-dot in"></span> In Stock</span>
+                <span>⚡ 25 min</span>
+                <span>⭐ 4.7</span>
+              </div>
+            </div>
+            <div class="vendor-price-col">
+              <div class="vendor-price"><span class="currency">₹</span>71</div>
+              <div class="vendor-mrp">MRP ₹88</div>
+              <div class="vendor-discount">19% off</div>
+            </div>
+            <div class="vendor-action">
+              <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;">Select</button>
+            </div>
+          </div>
+
+          <div class="vendor-card fade-up" onclick="selectVendor(this)">
+            <div class="vendor-logo" style="background:#fce4ec;">🏪</div>
+            <div class="vendor-info">
+              <div class="vendor-name">Apollo Pharmacy <span class="local-badge">LOCAL</span></div>
+              <div class="vendor-meta">
+                <span><span class="stock-dot low"></span> Low Stock (4 left)</span>
+                <span>📍 2.1 km</span>
+              </div>
+            </div>
+            <div class="vendor-price-col">
+              <div class="vendor-price"><span class="currency">₹</span>80</div>
+              <div class="vendor-mrp">MRP ₹88</div>
+              <div class="vendor-discount">9% off</div>
+            </div>
+            <div class="vendor-action">
+              <button class="btn btn-outline" style="font-size:12px;padding:7px 14px;">Select</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div style="background:var(--green-light);border:1px solid #a7f3d0;border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;">
+        <div style="font-weight:700;font-size:14px;color:var(--green);margin-bottom:4px;">💡 Smart Split Detected</div>
+        <div style="font-size:13px;color:#065f46;">Best combination: Metformin from <strong>1mg</strong> + Telmisartan & Atorvastatin from <strong>PharmEasy</strong> = <strong>₹202 total</strong> (saving ₹93 vs buying all from one store)</div>
+      </div>
+
+      <button class="btn btn-primary btn-full btn-lg" onclick="goTo('cart', document.querySelectorAll('.nav-item')[2])">
+        🛒 View Smart Order Summary →
+      </button>
+
+    </div>
+  </div>
+
+  <!-- ==================== PAGE: CART ==================== -->
+  <div class="page" id="page-cart">
+    <div class="main">
+
+      <div class="metric-row" style="margin-bottom:20px;">
+        <div class="metric-chip">
+          <div class="metric-val">₹202</div>
+          <div class="metric-label">Total Payable</div>
+        </div>
+        <div class="metric-chip">
+          <div class="metric-val" style="color:var(--green);">₹93</div>
+          <div class="metric-label">You Save</div>
+        </div>
+        <div class="metric-chip">
+          <div class="metric-val">2</div>
+          <div class="metric-label">Vendors</div>
+        </div>
+        <div class="metric-chip">
+          <div class="metric-val">~25m</div>
+          <div class="metric-label">Delivery</div>
+        </div>
+      </div>
+
+      <div class="order-summary">
+
+        <div>
+          <div class="order-items fade-up">
+            <div class="order-items-header">
+              <span>🛒 Order Items (3 medicines)</span>
+              <span style="font-size:12px;color:var(--text3);">Split across 2 vendors</span>
+            </div>
+
+            <!-- Vendor 1 Group -->
+            <div style="padding:10px 20px 4px;background:var(--surface);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);">
+              🟠 Via 1mg
+            </div>
+            <div class="order-item-row">
+              <div class="order-item-icon" style="background:#fff3e0;">💊</div>
+              <div class="order-item-details">
+                <div class="order-item-name">Metformin 500mg × 60</div>
+                <div class="order-item-from">1mg · Est. ⚡ 25 min</div>
+              </div>
+              <div>
+                <div class="order-item-price">₹48</div>
+                <div class="order-item-savings">Saved ₹24</div>
+              </div>
+            </div>
+
+            <!-- Vendor 2 Group -->
+            <div style="padding:10px 20px 4px;background:var(--surface);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);">
+              🟢 Via PharmEasy
+            </div>
+            <div class="order-item-row">
+              <div class="order-item-icon" style="background:#e8f5e9;">💊</div>
+              <div class="order-item-details">
+                <div class="order-item-name">Telmisartan 40mg × 30</div>
+                <div class="order-item-from">PharmEasy · Est. ⚡ 18 min</div>
+              </div>
+              <div>
+                <div class="order-item-price">₹92</div>
+                <div class="order-item-savings">Saved ₹43</div>
+              </div>
+            </div>
+            <div class="order-item-row">
+              <div class="order-item-icon" style="background:#e8f5e9;">💊</div>
+              <div class="order-item-details">
+                <div class="order-item-name">Atorvastatin 10mg × 30</div>
+                <div class="order-item-from">PharmEasy · Est. ⚡ 18 min</div>
+              </div>
+              <div>
+                <div class="order-item-price">₹62</div>
+                <div class="order-item-savings">Saved ₹26</div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Delivery Options -->
+          <div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-top:16px;">
+            <div style="font-weight:700;font-size:14px;margin-bottom:14px;">🚚 Delivery Preference</div>
+
+            <div class="delivery-opt selected" onclick="selectDelivery(this)">
+              <div class="delivery-opt-icon">⚡</div>
+              <div>
+                <div class="delivery-opt-title">Express Delivery</div>
+                <div class="delivery-opt-sub">25–40 min · Both vendors delivered together</div>
+              </div>
+              <div class="delivery-opt-price">₹29</div>
+            </div>
+
+            <div class="delivery-opt" onclick="selectDelivery(this)">
+              <div class="delivery-opt-icon">📅</div>
+              <div>
+                <div class="delivery-opt-title">Scheduled Delivery</div>
+                <div class="delivery-opt-sub">Choose time slot · Today or Tomorrow</div>
+              </div>
+              <div class="delivery-opt-price">₹15</div>
+            </div>
+
+            <div class="delivery-opt" onclick="selectDelivery(this)">
+              <div class="delivery-opt-icon">🚶</div>
+              <div>
+                <div class="delivery-opt-title">Self Pickup — Sai Medical (1.2km)</div>
+                <div class="delivery-opt-sub">Ready in 10 min · Only local stock</div>
+              </div>
+              <div class="delivery-opt-price" style="color:var(--green);">FREE</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bill Card -->
+        <div>
+          <div class="bill-card fade-up">
+            <div class="bill-header">🧾 Bill Summary</div>
+            <div class="bill-rows">
+              <div class="bill-row"><span>Metformin 500mg</span><span>₹48</span></div>
+              <div class="bill-row"><span>Telmisartan 40mg</span><span>₹92</span></div>
+              <div class="bill-row"><span>Atorvastatin 10mg</span><span>₹62</span></div>
+              <div class="bill-row"><span>Delivery (Express)</span><span>₹29</span></div>
+              <div class="bill-row"><span>Platform Fee</span><span>₹0</span></div>
+              <div class="bill-row savings">
+                <span>💚 Total Savings</span><span>-₹93</span>
+              </div>
+              <div class="bill-row total"><span>Total Payable</span><span>₹231</span></div>
+            </div>
+
+            <div class="split-info">
+              <span>ℹ️</span>
+              <span>This order will be split and placed on 2 vendor platforms. You'll receive separate tracking for each. PharmaBridge manages coordination.</span>
+            </div>
+
+            <div style="padding: 16px 20px 20px;">
+              <button class="btn btn-primary btn-full btn-lg" onclick="placeOrder()">
+                ✅ Place Order — ₹231
+              </button>
+              <div style="text-align:center;font-size:11px;color:var(--text3);margin-top:10px;">
+                🔒 Secured by PharmaBridge · Prescription verified
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== PAGE: TRACK ==================== -->
+  <div class="page" id="page-track">
+    <div class="main">
+
+      <div style="max-width:600px;margin:0 auto;">
+
+        <div class="tracking-card fade-up">
+          <div class="tracking-id">ORDER #PB-20260604-7821</div>
+          <div class="tracking-title">Order Placed Successfully 🎉</div>
+          <div class="tracking-sub">2 shipments · 3 medicines · Est. delivery by 3:45 PM</div>
+
+          <div class="map-box">
+            <div class="map-pin" style="top:30%;left:40%;">📍</div>
+            <div class="map-pin" style="top:55%;left:60%;animation-delay:0.5s;">🛵</div>
+            <div style="font-size:13px;color:var(--text2);text-align:center;">
+              <div style="font-size:20px;margin-bottom:6px;">🗺️</div>
+              Live tracking active<br>
+              <span style="font-family:var(--mono);font-size:11px;">Banjara Hills, HYD</span>
+            </div>
+          </div>
+
+          <div class="track-steps">
+
+            <div class="track-step">
+              <div class="track-step-left">
+                <div class="track-circle done">✓</div>
+                <div class="track-line done"></div>
+              </div>
+              <div class="track-content">
+                <div class="track-step-title">Order Confirmed</div>
+                <div class="track-step-sub">Payment received · Both vendors notified</div>
+                <div class="track-step-time">3:12 PM</div>
+              </div>
+            </div>
+
+            <div class="track-step">
+              <div class="track-step-left">
+                <div class="track-circle done">✓</div>
+                <div class="track-line done"></div>
+              </div>
+              <div class="track-content">
+                <div class="track-step-title">Prescription Verified</div>
+                <div class="track-step-sub">Pharmacist reviewed · All medicines approved</div>
+                <div class="track-step-time">3:14 PM</div>
+              </div>
+            </div>
+
+            <div class="track-step">
+              <div class="track-step-left">
+                <div class="track-circle done">✓</div>
+                <div class="track-line done"></div>
+              </div>
+              <div class="track-content">
+                <div class="track-step-title">Packing in Progress</div>
+                <div class="track-step-sub">1mg packing Metformin · PharmEasy packing 2 items</div>
+                <div class="track-step-time">3:18 PM</div>
+              </div>
+            </div>
+
+            <div class="track-step">
+              <div class="track-step-left">
+                <div class="track-circle active">🛵</div>
+                <div class="track-line"></div>
+              </div>
+              <div class="track-content">
+                <div class="track-step-title">Out for Delivery</div>
+                <div class="track-step-sub">Rider picked up from 1mg · 1.8 km away</div>
+                <div class="track-step-time">3:24 PM · Now</div>
+              </div>
+            </div>
+
+            <div class="track-step">
+              <div class="track-step-left">
+                <div class="track-circle">🏠</div>
+              </div>
+              <div class="track-content">
+                <div class="track-step-title" style="color:var(--text3);">Delivered</div>
+                <div class="track-step-sub" style="color:var(--text3);">Est. 3:38–3:45 PM</div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <div style="background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-top:16px;box-shadow:var(--shadow);">
+          <div style="font-weight:700;font-size:14px;margin-bottom:14px;">🔄 Set Auto-Refill?</div>
+          <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">These are chronic medicines. PharmaBridge can auto-remind you every 28 days and re-order from the best available vendor.</p>
+          <div style="display:flex;gap:10px;">
+            <button class="btn btn-primary" style="flex:1;" onclick="showToast('✅ Auto-refill enabled for 28 days', 'success')">Enable Auto-Refill</button>
+            <button class="btn btn-outline" style="flex:1;">Not Now</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== PAGE: HISTORY ==================== -->
+  <div class="page" id="page-history">
+    <div class="main">
+
+      <div class="section-header" style="margin-bottom:20px;">
+        <div class="section-title">📁 Order History</div>
+        <div class="section-link">Download All</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:12px;">
+
+        <div class="vendor-card fade-up" style="flex-direction:column;align-items:flex-start;gap:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+            <div>
+              <div style="font-weight:700;">Order #PB-20260604-7821</div>
+              <div style="font-size:12px;color:var(--text3);font-family:var(--mono);">Today, 3:12 PM · 3 medicines</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-weight:700;font-size:16px;">₹231</div>
+              <div class="checking-badge"><div class="spinner"></div> Out for Delivery</div>
+            </div>
+          </div>
+          <div class="tag-row">
+            <span class="tag tag-blue">1mg</span>
+            <span class="tag tag-green">PharmEasy</span>
+            <span class="tag tag-orange">Chronic Rx</span>
+          </div>
+        </div>
+
+        <div class="vendor-card fade-up">
+          <div style="flex:1;">
+            <div style="font-weight:700;">Order #PB-20260507-4412</div>
+            <div style="font-size:12px;color:var(--text3);font-family:var(--mono);">07 May 2026 · 3 medicines</div>
+            <div class="tag-row" style="margin-top:6px;">
+              <span class="tag tag-green">PharmEasy</span>
+              <span class="tag tag-orange">Chronic Rx</span>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-weight:700;font-size:16px;">₹218</div>
+            <div style="font-size:11px;color:var(--green);margin-top:3px;">✓ Delivered</div>
+          </div>
+        </div>
+
+        <div class="vendor-card fade-up">
+          <div style="flex:1;">
+            <div style="font-weight:700;">Order #PB-20260409-3301</div>
+            <div style="font-size:12px;color:var(--text3);font-family:var(--mono);">09 Apr 2026 · 3 medicines</div>
+            <div class="tag-row" style="margin-top:6px;">
+              <span class="tag tag-blue">1mg</span>
+              <span class="tag tag-orange">Chronic Rx</span>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-weight:700;font-size:16px;">₹225</div>
+            <div style="font-size:11px;color:var(--green);margin-top:3px;">✓ Delivered</div>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="background:var(--primary-light);border:1px solid #bfdbfe;border-radius:var(--radius);padding:20px;margin-top:24px;">
+        <div style="font-weight:700;font-size:15px;margin-bottom:6px;color:var(--primary);">📊 Your 3-Month Summary</div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:10px;">
+          <div><div style="font-size:22px;font-weight:800;">₹674</div><div style="font-size:11px;color:var(--text3);">Total Spent</div></div>
+          <div><div style="font-size:22px;font-weight:800;color:var(--green);">₹276</div><div style="font-size:11px;color:var(--text3);">Total Saved</div></div>
+          <div><div style="font-size:22px;font-weight:800;">3</div><div style="font-size:11px;color:var(--text3);">Orders</div></div>
+          <div><div style="font-size:22px;font-weight:800;">29%</div><div style="font-size:11px;color:var(--text3);">Avg. Discount</div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Hide loading screen
+setTimeout(() => {
+  document.getElementById('loadingScreen').classList.add('hidden');
+}, 2800);
+
+// Navigation
+function goTo(pageId, navEl) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + pageId).classList.add('active');
+  if (navEl) navEl.classList.add('active');
+}
+
+// Upload
+function handleUpload() {
+  showToast('📂 File picker would open here', 'info');
+}
+
+function loadDemoRx() {
+  const card = document.getElementById('demoRxCard');
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  showToast('✅ Sample prescription loaded & verified!', 'success');
+}
+
+// Filter chips
+function toggleFilter(el) {
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  showToast('🔄 Filtering vendors…', 'info');
+}
+
+// Select vendor
+function selectVendor(card) {
+  const siblings = card.parentElement.querySelectorAll('.vendor-card');
+  siblings.forEach(c => {
+    c.classList.remove('selected');
+    c.querySelector('.btn') && (c.querySelector('.btn').className = 'btn btn-outline');
+    c.querySelector('.btn') && (c.querySelector('.btn').textContent = 'Select');
+  });
+  card.classList.add('selected');
+  if (card.querySelector('.btn')) {
+    card.querySelector('.btn').className = 'btn btn-green';
+    card.querySelector('.btn').textContent = '✓ Selected';
+  }
+  showToast('✅ Vendor selected', 'success');
+}
+
+// Delivery option
+function selectDelivery(el) {
+  document.querySelectorAll('.delivery-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+// Place order
+function placeOrder() {
+  showToast('🎉 Order placed! Tracking order now…', 'success');
+  setTimeout(() => goTo('track', document.querySelectorAll('.nav-item')[3]), 1200);
+}
+
+// Toast
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2500);
+}
+</script>
+
+</body>
+</html>

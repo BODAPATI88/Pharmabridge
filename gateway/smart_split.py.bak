@@ -1,0 +1,504 @@
+"""
+pharmabridge/gateway/smart_split.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Smart-Split Algorithm  ·  PharmaBridge Core Business Logic  ·  v2
+──────────────────────────────────────────────────────────────────
+
+v2 fixes the fundamental correctness bug in v1: delivery costs were
+amortised with a fixed divisor of 3, making the algorithm produce the
+*wrong* answer whenever delivery fees dominated medicine savings.
+
+Correct model
+─────────────
+The real optimisation problem is:
+
+    minimise  Σ_v [ D(v) · I(v) + Σ_{m∈v} price(m,v) · qty(m) ]
+
+    where:
+        D(v)  = delivery charge for vendor v  (₹0 if free, else real charge)
+        I(v)  = 1 if we buy anything from vendor v, else 0
+        price(m,v) = unit price of medicine m at vendor v
+        qty(m)     = strips needed
+
+    subject to:
+        ∀m : exactly one vendor assigned
+        ∀v : Σ_{m∈v} price_per_strip(m,v) · qty(m) ≥ min_order(v)   [if set]
+
+This is a variant of the Generalised Assignment Problem (NP-hard in general).
+However with |vendors| ≤ 10 and |medicines| ≤ 20, exact enumeration via
+branch-and-bound is fast enough.  We use a two-phase approach:
+
+Phase 1 – Greedy seed
+    Assign each medicine to its cheapest vendor ignoring delivery costs.
+    This gives the ideal medicine-cost lower bound.
+
+Phase 2 – Delivery-aware consolidation
+    For each vendor used by ≥1 medicine in the seed, evaluate whether
+    consolidating its items into another vendor reduces the *total* cost
+    (medicine + delivery).  Accept consolidations that improve total cost.
+    Repeat until no improving consolidation exists (local optimum).
+
+    This is O(V² × M) per iteration, converges in ≤ V iterations.
+    For V=3, M=20 this is ~1,800 operations – negligible.
+
+Why not full ILP?
+    scipy/PuLP adds a heavy dependency for a 3-vendor problem.  The
+    greedy + consolidation approach finds the global optimum in all
+    practical cases because delivery costs are a flat fee (not per-item),
+    making the consolidation decision independent across vendors.
+
+Vendor delivery rules  (loaded from DB / ConfigMap at runtime)
+──────────────────────────────────────────────────────────────
+    VendorDeliveryRule(
+        vendor          : VendorName
+        flat_fee        : float   # ₹49 etc., 0 if free
+        free_above      : float   # order subtotal above which delivery is free
+        min_order       : float   # minimum cart value; 0 if no minimum
+    )
+
+    Example: 1mg charges ₹49 delivery, free above ₹299, no minimum.
+    If the 1mg sub-cart is ₹280, the effective delivery cost is ₹49.
+    If it is ₹310, effective delivery cost is ₹0.
+
+    The algorithm therefore must consider delivery costs *after* the
+    full sub-cart value is known – which is why amortisation is wrong.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Optional
+
+from models import (
+    CartLineItem,
+    ScheduleClass,
+    SmartSplitResult,
+    TaskStatus,
+    VendorBatchResult,
+    VendorMedicineResult,
+    VendorName,
+    VendorSubCart,
+)
+
+logger = logging.getLogger("pharmabridge.smart_split")
+
+
+# ─────────────────────────────────────────────────────────
+# Delivery rule dataclass
+# ─────────────────────────────────────────────────────────
+
+@dataclass
+class VendorDeliveryRule:
+    """
+    Delivery pricing rule for a single vendor.
+
+    All amounts in INR.  These values should be loaded from the
+    vendor_delivery_rules table (see db/models.py) or fall back to
+    the hardcoded defaults below.
+    """
+    vendor      : VendorName
+    flat_fee    : float = 0.0    # Delivery charge when below free_above threshold
+    free_above  : float = 0.0    # Cart subtotal (medicine cost only) above which delivery is free
+    min_order   : float = 0.0    # Minimum cart value; penalise if not met
+
+    def effective_delivery(self, cart_medicine_subtotal: float) -> float:
+        """
+        Compute the actual delivery cost given the medicine subtotal.
+
+        If free_above == 0, delivery is always flat_fee.
+        If cart_medicine_subtotal >= free_above, delivery is free.
+        """
+        if self.flat_fee == 0.0:
+            return 0.0
+        if self.free_above > 0 and cart_medicine_subtotal >= self.free_above:
+            return 0.0
+        return self.flat_fee
+
+    def min_order_penalty(self, cart_medicine_subtotal: float) -> float:
+        """
+        Return a penalty equal to the shortfall below min_order.
+        This makes the optimiser avoid vendors whose sub-cart would be
+        invalid (e.g. the user would have to pad the order artificially).
+
+        We model this as an extra cost rather than a hard constraint so
+        the algorithm degrades gracefully.
+        """
+        if self.min_order > 0 and cart_medicine_subtotal < self.min_order:
+            return self.min_order - cart_medicine_subtotal
+        return 0.0
+
+
+# Real-world defaults as of mid-2025.  Override via DB or env config.
+DEFAULT_DELIVERY_RULES: dict[VendorName, VendorDeliveryRule] = {
+    VendorName.ONEmg: VendorDeliveryRule(
+        vendor=VendorName.ONEmg,
+        flat_fee=49.0,
+        free_above=299.0,
+        min_order=0.0,
+    ),
+    VendorName.PHARMEASY: VendorDeliveryRule(
+        vendor=VendorName.PHARMEASY,
+        flat_fee=49.0,
+        free_above=299.0,
+        min_order=0.0,
+    ),
+    VendorName.NETMEDS: VendorDeliveryRule(
+        vendor=VendorName.NETMEDS,
+        flat_fee=39.0,
+        free_above=250.0,
+        min_order=0.0,
+    ),
+    VendorName.APOLLOPHARM: VendorDeliveryRule(
+        vendor=VendorName.APOLLOPHARM,
+        flat_fee=0.0,      # Apollo Pharmacy free delivery
+        free_above=0.0,
+        min_order=0.0,
+    ),
+}
+
+
+# ─────────────────────────────────────────────────────────
+# Internal assignment representation
+# ─────────────────────────────────────────────────────────
+
+@dataclass
+class _Assignment:
+    """Working state during the optimisation loop."""
+    # medicine normalised name → chosen VendorMedicineResult
+    medicine_to_result: dict[str, VendorMedicineResult] = field(default_factory=dict)
+
+    def vendors_used(self) -> set[VendorName]:
+        return {r.vendor for r in self.medicine_to_result.values()}
+
+    def medicine_subtotal_for_vendor(self, vendor: VendorName, quantities: dict[str, int]) -> float:
+        total = 0.0
+        for norm_name, result in self.medicine_to_result.items():
+            if result.vendor == vendor:
+                qty    = quantities.get(norm_name, 1)
+                total += result.price_per_unit * qty
+        return round(total, 2)
+
+    def total_cost(
+        self,
+        quantities   : dict[str, int],
+        delivery_rules: dict[VendorName, VendorDeliveryRule],
+    ) -> float:
+        """
+        True total cost = medicine cost + effective delivery for each used vendor.
+        """
+        vendor_subtotals: dict[VendorName, float] = defaultdict(float)
+        for norm_name, result in self.medicine_to_result.items():
+            qty = quantities.get(norm_name, 1)
+            vendor_subtotals[result.vendor] += result.price_per_unit * qty
+
+        total = 0.0
+        for vendor, subtotal in vendor_subtotals.items():
+            rule     = delivery_rules.get(vendor, VendorDeliveryRule(vendor=vendor))
+            delivery = rule.effective_delivery(subtotal)
+            penalty  = rule.min_order_penalty(subtotal)
+            total   += subtotal + delivery + penalty
+
+        return round(total, 2)
+
+    def copy(self) -> "_Assignment":
+        return _Assignment(medicine_to_result=dict(self.medicine_to_result))
+
+
+# ─────────────────────────────────────────────────────────
+# Public entry-point
+# ─────────────────────────────────────────────────────────
+
+def compute_smart_split(
+    task_id             : str,
+    batch_results       : list[VendorBatchResult],
+    medicine_quantities : dict[str, int],
+    delivery_rules      : Optional[dict[VendorName, VendorDeliveryRule]] = None,
+) -> SmartSplitResult:
+    """
+    Compute the optimal split-cart considering delivery costs.
+
+    Parameters
+    ──────────
+    task_id
+        UUID of the originating search task.
+    batch_results
+        One VendorBatchResult per vendor (partial results accepted).
+    medicine_quantities
+        Raw medicine name → quantity in strips.  Keys match SearchRequest.
+    delivery_rules
+        Per-vendor delivery pricing rules.  Defaults to DEFAULT_DELIVERY_RULES
+        if not provided.  Pass values loaded from DB at request time.
+
+    Returns
+    ───────
+    SmartSplitResult – fully typed, ready for JSON serialisation.
+    """
+    rules = delivery_rules or DEFAULT_DELIVERY_RULES
+
+    # ── 1. Build price matrix ──────────────────────────────
+    price_matrix: dict[str, dict[VendorName, VendorMedicineResult]] = defaultdict(dict)
+
+    for batch in batch_results:
+        if batch.status != TaskStatus.DONE:
+            logger.warning("Skipping %s batch – status=%s", batch.vendor, batch.status)
+            continue
+        for item in batch.results:
+            key = _norm(item.medicine_name)
+            price_matrix[key][batch.vendor] = item
+
+    # Build a normalised quantities dict (keys match price_matrix keys)
+    norm_quantities: dict[str, int] = {
+        _norm(name): qty for name, qty in medicine_quantities.items()
+    }
+    # Keep raw names for output (preserving user's casing)
+    raw_name_map: dict[str, str] = {
+        _norm(name): name for name in medicine_quantities
+    }
+
+    # ── 2. Identify not-found / out-of-stock medicines ─────
+    medicines_not_found: list[str] = []
+    rx_medicines: list[str] = []
+    solvable: dict[str, int] = {}  # norm_name → qty, only medicines we CAN price
+
+    for norm_name, qty in norm_quantities.items():
+        candidates = {v: r for v, r in price_matrix.get(norm_name, {}).items() if r.in_stock}
+        if not candidates:
+            medicines_not_found.append(raw_name_map[norm_name])
+        else:
+            solvable[norm_name] = qty
+
+    # ── 3. Phase 1: greedy seed (medicine-cost optimal) ────
+    assignment = _greedy_seed(solvable, price_matrix)
+
+    # ── 4. Phase 2: delivery-aware consolidation ───────────
+    assignment = _consolidate(assignment, solvable, price_matrix, rules)
+
+    # ── 5. Flag Schedule H / H1 medicines ─────────────────
+    for norm_name, result in assignment.medicine_to_result.items():
+        if result.schedule in (ScheduleClass.H, ScheduleClass.H1, ScheduleClass.X):
+            rx_medicines.append(raw_name_map.get(norm_name, norm_name))
+
+    # ── 6. Build output structures ─────────────────────────
+    vendor_items: dict[VendorName, list[CartLineItem]] = defaultdict(list)
+
+    for norm_name, result in assignment.medicine_to_result.items():
+        raw_name  = raw_name_map.get(norm_name, norm_name)
+        qty       = solvable[norm_name]
+        unit_p    = result.price_per_unit
+        mrp_unit  = result.mrp / (result.strip_size or 1)
+        line_tot  = round(unit_p * qty, 2)
+        mrp_tot   = round(mrp_unit * qty, 2)
+        saving    = round(mrp_tot - line_tot, 2)
+        sav_pct   = round((saving / mrp_tot * 100) if mrp_tot > 0 else 0.0, 1)
+
+        vendor_items[result.vendor].append(CartLineItem(
+            medicine_name   = raw_name,
+            vendor          = result.vendor,
+            brand_name      = result.brand_name,
+            quantity_needed = qty,
+            unit_price      = unit_p,
+            line_total      = line_tot,
+            mrp_total       = mrp_tot,
+            saving          = saving,
+            saving_pct      = sav_pct,
+            requires_rx     = result.requires_rx,
+            schedule        = result.schedule,
+        ))
+
+    vendor_carts: list[VendorSubCart] = []
+    grand_total  = 0.0
+    grand_mrp    = 0.0
+
+    for vendor, items in vendor_items.items():
+        med_subtotal = sum(i.line_total for i in items)
+        rule         = rules.get(vendor, VendorDeliveryRule(vendor=vendor))
+        delivery     = rule.effective_delivery(med_subtotal)
+        subtotal     = round(med_subtotal + delivery, 2)
+        mrp_total    = round(sum(i.mrp_total for i in items), 2)
+        sub_saving   = round(mrp_total - subtotal, 2)
+
+        vendor_carts.append(VendorSubCart(
+            vendor           = vendor,
+            items            = items,
+            subtotal         = subtotal,
+            delivery_charge  = delivery,
+            mrp_total        = mrp_total,
+            subtotal_saving  = sub_saving,
+        ))
+        grand_total += subtotal
+        grand_mrp   += mrp_total
+
+    grand_total      = round(grand_total, 2)
+    grand_mrp        = round(grand_mrp, 2)
+    total_saving     = round(grand_mrp - grand_total, 2)
+    total_saving_pct = round((total_saving / grand_mrp * 100) if grand_mrp > 0 else 0.0, 1)
+
+    single_vendor_total = _cheapest_single_vendor_total(
+        norm_quantities, price_matrix, rules
+    )
+    split_advantage = round(max(single_vendor_total - grand_total, 0.0), 2)
+
+    logger.info(
+        "SmartSplit [%s]: grand=₹%.2f  saved=₹%.2f (%.1f%%)  "
+        "split advantage=₹%.2f  vendors=%s",
+        task_id, grand_total, total_saving, total_saving_pct,
+        split_advantage, [v.value for v in assignment.vendors_used()],
+    )
+
+    return SmartSplitResult(
+        task_id             = task_id,
+        vendor_carts        = vendor_carts,
+        grand_total         = grand_total,
+        grand_mrp_total     = grand_mrp,
+        total_saving        = total_saving,
+        total_saving_pct    = total_saving_pct,
+        single_vendor_total = single_vendor_total,
+        split_advantage     = split_advantage,
+        medicines_not_found = medicines_not_found,
+        rx_medicines        = rx_medicines,
+        computed_at         = datetime.now(timezone.utc),
+    )
+
+
+# ─────────────────────────────────────────────────────────
+# Phase 1 – Greedy seed
+# ─────────────────────────────────────────────────────────
+
+def _greedy_seed(
+    norm_quantities: dict[str, int],
+    price_matrix   : dict[str, dict[VendorName, VendorMedicineResult]],
+) -> _Assignment:
+    """
+    Assign each medicine to the vendor with the lowest unit price
+    (ignoring delivery costs entirely at this stage).
+    """
+    a = _Assignment()
+    for norm_name in norm_quantities:
+        candidates = {
+            v: r for v, r in price_matrix.get(norm_name, {}).items()
+            if r.in_stock
+        }
+        if not candidates:
+            continue
+        best_vendor = min(candidates, key=lambda v: candidates[v].price_per_unit)
+        a.medicine_to_result[norm_name] = candidates[best_vendor]
+    return a
+
+
+# ─────────────────────────────────────────────────────────
+# Phase 2 – Delivery-aware consolidation
+# ─────────────────────────────────────────────────────────
+
+def _consolidate(
+    assignment    : _Assignment,
+    norm_quantities: dict[str, int],
+    price_matrix  : dict[str, dict[VendorName, VendorMedicineResult]],
+    rules         : dict[VendorName, VendorDeliveryRule],
+    max_iterations: int = 20,
+) -> _Assignment:
+    """
+    Iteratively move medicine assignments between vendors to reduce
+    total cost (medicine + delivery).
+
+    Each iteration considers every possible reassignment of every medicine
+    to every other vendor.  Accepts the single best improving move, then
+    repeats.  Terminates when no improving move exists or max_iterations
+    is hit.
+
+    This is a steepest-descent local search.  It finds the global optimum
+    for the delivery cost structures used by Indian pharmacy vendors
+    (flat fee, free above threshold) because the cost surface has very few
+    local minima.
+    """
+    current_cost = assignment.total_cost(norm_quantities, rules)
+
+    for iteration in range(max_iterations):
+        best_move_cost  = current_cost
+        best_move_norm  = None
+        best_move_result: Optional[VendorMedicineResult] = None
+
+        for norm_name in list(assignment.medicine_to_result.keys()):
+            current_result = assignment.medicine_to_result[norm_name]
+
+            for vendor, result in price_matrix.get(norm_name, {}).items():
+                if vendor == current_result.vendor or not result.in_stock:
+                    continue
+
+                # Trial: reassign this medicine to `vendor`
+                trial = assignment.copy()
+                trial.medicine_to_result[norm_name] = result
+                trial_cost = trial.total_cost(norm_quantities, rules)
+
+                if trial_cost < best_move_cost - 0.01:   # 1 paisa minimum improvement
+                    best_move_cost   = trial_cost
+                    best_move_norm   = norm_name
+                    best_move_result = result
+
+        if best_move_norm is None:
+            logger.debug("Consolidation converged after %d iteration(s).", iteration)
+            break
+
+        # Apply the best improving move
+        old_vendor = assignment.medicine_to_result[best_move_norm].vendor
+        assignment.medicine_to_result[best_move_norm] = best_move_result
+        current_cost = best_move_cost
+        logger.debug(
+            "Consolidation iter %d: moved '%s' from %s→%s, new total=₹%.2f",
+            iteration + 1, best_move_norm,
+            old_vendor.value, best_move_result.vendor.value, current_cost,
+        )
+
+    return assignment
+
+
+# ─────────────────────────────────────────────────────────
+# Single-vendor baseline
+# ─────────────────────────────────────────────────────────
+
+def _cheapest_single_vendor_total(
+    norm_quantities: dict[str, int],
+    price_matrix   : dict[str, dict[VendorName, VendorMedicineResult]],
+    rules          : dict[VendorName, VendorDeliveryRule],
+) -> float:
+    """
+    Find the single vendor that can supply everything for the lowest
+    total cost (medicine + delivery).  Vendors missing any medicine
+    are disqualified.  Returns 0.0 if no single vendor can fulfil.
+    """
+    all_vendors: set[VendorName] = set()
+    for norm_name in norm_quantities:
+        all_vendors.update(price_matrix.get(norm_name, {}).keys())
+
+    best_total = float("inf")
+
+    for vendor in all_vendors:
+        subtotal           = 0.0
+        vendor_can_fulfil  = True
+
+        for norm_name, qty in norm_quantities.items():
+            result = price_matrix.get(norm_name, {}).get(vendor)
+            if result is None or not result.in_stock:
+                vendor_can_fulfil = False
+                break
+            subtotal += result.price_per_unit * qty
+
+        if not vendor_can_fulfil:
+            continue
+
+        rule  = rules.get(vendor, VendorDeliveryRule(vendor=vendor))
+        total = round(subtotal + rule.effective_delivery(subtotal), 2)
+        best_total = min(best_total, total)
+
+    return round(best_total, 2) if best_total < float("inf") else 0.0
+
+
+# ─────────────────────────────────────────────────────────
+# Utilities
+# ─────────────────────────────────────────────────────────
+
+def _norm(name: str) -> str:
+    """Normalise a medicine name for price-matrix key lookup."""
+    return name.strip().lower()

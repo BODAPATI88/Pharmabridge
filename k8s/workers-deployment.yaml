@@ -1,0 +1,193 @@
+# pharmabridge/k8s/workers-deployment.yaml
+# ──────────────────────────────────────────
+# Three worker Deployments, one per vendor.
+# They all use the same Docker image but differ in:
+#   CMD (which worker_*.py to run)
+#   POD_NAME env for heartbeat identification
+#
+# Scaling notes:
+#   • 1mg uses Playwright (CPU + memory heavy) → lower replica count
+#   • PharmEasy / Netmeds use HTTP → can scale higher if needed
+#   • In production, tune replicas based on scrape queue depth
+#     via KEDA (Kubernetes Event-Driven Autoscaler) targeting the
+#     Redis list length.
+
+# ──────────────────────────────────────────────
+# 1mg Worker
+# ──────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-1mg
+  namespace: pharmabridge
+  labels:
+    app: worker-1mg
+    app.kubernetes.io/component: worker
+    vendor: 1mg
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker-1mg
+  template:
+    metadata:
+      labels:
+        app: worker-1mg
+        vendor: 1mg
+      annotations:
+        prometheus.io/scrape: "false"   # Workers don't expose HTTP metrics
+    spec:
+      containers:
+        - name: worker-1mg
+          image: bodapati88/pharmabridge-worker:latest
+          imagePullPolicy: Always
+          command: ["python", "worker_1mg.py"]
+          envFrom:
+            - configMapRef:
+                name: pharmabridge-config
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu:    "300m"    # Playwright Chromium is CPU-hungry at launch
+              memory: "512Mi"   # Chromium baseline ~300 MB + Python
+            limits:
+              cpu:    "1500m"
+              memory: "1Gi"
+          # Workers have no HTTP port – use process-level liveness
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import redis, os, sys
+                  r = redis.from_url(os.environ['REDIS_URL'])
+                  r.ping()
+                  sys.exit(0)
+            initialDelaySeconds: 15
+            periodSeconds: 60
+            failureThreshold: 3
+
+---
+# ──────────────────────────────────────────────
+# PharmEasy Worker
+# ──────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-pharmeasy
+  namespace: pharmabridge
+  labels:
+    app: worker-pharmeasy
+    app.kubernetes.io/component: worker
+    vendor: pharmeasy
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker-pharmeasy
+  template:
+    metadata:
+      labels:
+        app: worker-pharmeasy
+        vendor: pharmeasy
+    spec:
+      containers:
+        - name: worker-pharmeasy
+          image: bodapati88/pharmabridge-worker:latest
+          imagePullPolicy: Always
+          command: ["python", "worker_pharmeasy.py"]
+          envFrom:
+            - configMapRef:
+                name: pharmabridge-config
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu:    "100m"
+              memory: "128Mi"
+            limits:
+              cpu:    "500m"
+              memory: "256Mi"
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import redis, os, sys
+                  r = redis.from_url(os.environ['REDIS_URL'])
+                  r.ping()
+                  sys.exit(0)
+            initialDelaySeconds: 15
+            periodSeconds: 60
+
+---
+# ──────────────────────────────────────────────
+# Netmeds Worker
+# ──────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-netmeds
+  namespace: pharmabridge
+  labels:
+    app: worker-netmeds
+    app.kubernetes.io/component: worker
+    vendor: netmeds
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker-netmeds
+  template:
+    metadata:
+      labels:
+        app: worker-netmeds
+        vendor: netmeds
+    spec:
+      containers:
+        - name: worker-netmeds
+          image: bodapati88/pharmabridge-worker:latest
+          imagePullPolicy: Always
+          command: ["python", "worker_netmeds.py"]
+          envFrom:
+            - configMapRef:
+                name: pharmabridge-config
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu:    "100m"
+              memory: "128Mi"
+            limits:
+              cpu:    "500m"
+              memory: "256Mi"
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import redis, os, sys
+                  r = redis.from_url(os.environ['REDIS_URL'])
+                  r.ping()
+                  sys.exit(0)
+            initialDelaySeconds: 15
+            periodSeconds: 60

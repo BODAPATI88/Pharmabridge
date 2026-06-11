@@ -1,0 +1,204 @@
+"""
+pharmabridge/gateway/logging_config.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Structured JSON logging with per-request context propagation.
+
+Every log line carries:
+  request_id  – UUID assigned at request ingress (X-Request-ID header or generated)
+  user_id     – from JWT token (if authenticated)
+  task_id     – for search/result endpoints
+  path        – URL path
+  method      – HTTP method
+  duration_ms – added at response time
+
+Why structlog over stdlib logging?
+────────────────────────────────────
+stdlib logging formats are hard to parse programmatically.
+structlog outputs JSON that Loki can index by field, enabling:
+  - {request_id="abc123"} → full trace of one request across all log lines
+  - {user_id="xxx"} → all activity for one user
+  - {task_id="yyy"} → full lifecycle of one search
+
+Context propagation
+────────────────────
+We use a contextvars.ContextVar to store per-request state.
+The RequestContextMiddleware populates it at request entry.
+All subsequent log calls in the same async task pick it up automatically.
+
+Loki integration
+────────────────
+The JSON output is picked up by Promtail (already in your stack) with
+this pipeline stage in promtail-config.yaml:
+  pipeline_stages:
+    - json:
+        expressions:
+          level: level
+          request_id: request_id
+          user_id: user_id
+    - labels:
+        level:
+        request_id:
+        user_id:
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import time
+import uuid
+from contextvars import ContextVar
+from typing import Optional
+
+import structlog
+from fastapi import Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+
+# ─────────────────────────────────────────────────────────
+# Per-request context variable
+# ─────────────────────────────────────────────────────────
+
+_request_context: ContextVar[dict] = ContextVar(
+    "request_context",
+    default={},
+)
+
+
+def get_request_context() -> dict:
+    return _request_context.get()
+
+
+def set_request_context(**kwargs) -> None:
+    ctx = dict(_request_context.get())
+    ctx.update(kwargs)
+    _request_context.set(ctx)
+
+
+# ─────────────────────────────────────────────────────────
+# structlog configuration
+# ─────────────────────────────────────────────────────────
+
+def configure_logging(level: str = "INFO", json_output: bool = True) -> None:
+    """
+    Call once at application startup.
+    json_output=True in production (for Loki), False in local dev (human-readable).
+    """
+    log_level = getattr(logging, level.upper(), logging.INFO)
+
+    shared_processors = [
+        structlog.contextvars.merge_contextvars,       # Pull from ContextVar
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+    ]
+
+    if json_output:
+        renderer = structlog.processors.JSONRenderer()
+    else:
+        renderer = structlog.dev.ConsoleRenderer(colors=True)
+
+    structlog.configure(
+        processors           = shared_processors + [renderer],
+        wrapper_class        = structlog.make_filtering_bound_logger(log_level),
+        context_class        = dict,
+        logger_factory       = structlog.PrintLoggerFactory(),
+        cache_logger_on_first_use = True,
+    )
+
+    # Also configure stdlib logging so third-party libs (uvicorn, SQLAlchemy)
+    # go through structlog's output format
+    logging.basicConfig(
+        format   = "%(message)s",
+        level    = log_level,
+        handlers = [logging.StreamHandler()],
+    )
+
+
+def get_logger(name: str):
+    """Get a structlog logger bound with the module name."""
+    return structlog.get_logger(name)
+
+
+# ─────────────────────────────────────────────────────────
+# FastAPI middleware
+# ─────────────────────────────────────────────────────────
+
+class RequestContextMiddleware(BaseHTTPMiddleware):
+    """
+    Assigns a request_id to every request and injects it into:
+      1. The structlog context (all log calls in this request carry it)
+      2. The response headers (X-Request-ID for client-side correlation)
+
+    Also logs request start + completion with timing.
+    """
+
+    SKIP_PATHS = {"/api/v1/health", "/metrics", "/favicon.ico"}
+
+    async def dispatch(
+        self,
+        request : Request,
+        call_next: RequestResponseEndpoint,
+    ) -> Response:
+        # Reuse client-provided request ID if present and well-formed
+        request_id = request.headers.get("X-Request-ID", "")
+        if not request_id or len(request_id) > 64:
+            request_id = str(uuid.uuid4())
+
+        # Extract user_id from Bearer token if present (best-effort, no 401)
+        user_id: Optional[str] = None
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            try:
+                from auth import decode_access_token
+                payload = decode_access_token(auth_header[7:])
+                user_id = payload.sub
+            except Exception:
+                pass
+
+        # Bind context variables for structlog
+        structlog.contextvars.clear_contextvars()
+        structlog.contextvars.bind_contextvars(
+            request_id = request_id,
+            user_id    = user_id or "anonymous",
+            method     = request.method,
+            path       = request.url.path,
+        )
+
+        start   = time.monotonic()
+        log     = get_logger("pharmabridge.request")
+        skipped = request.url.path in self.SKIP_PATHS
+
+        if not skipped:
+            log.info("request_start", ip=_extract_ip(request))
+
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            duration_ms = round((time.monotonic() - start) * 1000, 1)
+            log.error("request_error", duration_ms=duration_ms, error=str(exc))
+            raise
+
+        duration_ms = round((time.monotonic() - start) * 1000, 1)
+
+        if not skipped:
+            log.info(
+                "request_complete",
+                status_code = response.status_code,
+                duration_ms = duration_ms,
+            )
+
+        # Add correlation headers to every response
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
+def _extract_ip(request: Request) -> str:
+    cf = request.headers.get("CF-Connecting-IP")
+    if cf:
+        return cf.strip()
+    fwd = request.headers.get("X-Forwarded-For")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"

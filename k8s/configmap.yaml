@@ -1,0 +1,35 @@
+# pharmabridge/k8s/configmap.yaml
+# ──────────────────────────────────────────────────────────
+# Non-secret runtime config shared across all pods.
+# Secrets (Redis password, proxy credentials) go in a K8s Secret
+# or Sealed Secret – never in a ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pharmabridge-config
+  namespace: pharmabridge
+data:
+  # Gateway
+  REDIS_URL:          "redis://redis-svc.pharmabridge.svc.cluster.local:6379/0"
+  WORKER_TIMEOUT_S:   "15"
+  RESULT_TTL_S:       "3600"
+  CACHE_TTL_S:        "300"
+  HEARTBEAT_TTL_S:    "90"
+  FRONTEND_DIR:       "/app/frontend"
+  GATEWAY_VERSION:    "1.0.0"
+  CORS_ORIGINS:       "https://pharmabridge.bvrinfra.in,https://pharmabridge-ops.bvrinfra.in"
+
+  # Workers
+  USE_MOCK:             "true"    # Set to "false" in prod when scrapers are validated
+  REQUEST_TIMEOUT_MS:   "12000"
+  WORKER_MAX_RETRIES:   "3"
+  WORKER_BACKOFF_BASE:  "2.0"
+  HEARTBEAT_INTERVAL_S: "30"
+
+  # MinIO / Object Storage
+  MINIO_ENDPOINT_URL:    "http://minio-svc.pharmabridge.svc.cluster.local:9000"
+  MINIO_REGION:          "us-east-1"
+  MINIO_PRESCS_BUCKET:   "pharmabridge-prescriptions"
+  PRESIGNED_PUT_TTL_SECONDS: "300"
+  PRESIGNED_GET_TTL_SECONDS: "900"
+  MAX_PRESCRIPTION_BYTES:    "10485760"   # 10 MB

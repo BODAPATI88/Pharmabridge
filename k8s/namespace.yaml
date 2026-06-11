@@ -1,0 +1,8 @@
+# pharmabridge/k8s/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pharmabridge
+  labels:
+    app.kubernetes.io/part-of: pharmabridge
+    environment: production

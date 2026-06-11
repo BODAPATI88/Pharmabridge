@@ -1,0 +1,160 @@
+# pharmabridge/docker-compose.yml
+# ────────────────────────────────
+# Local development environment.
+# Starts: Redis, Gateway, all three Workers.
+# Access the consumer UI at http://localhost:8000/
+# Access the operator console at http://localhost:8000/operator
+# API docs at http://localhost:8000/api/docs
+
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: pharmabridge-postgres
+    environment:
+      POSTGRES_USER:     pharmabridge
+      POSTGRES_PASSWORD: pharmabridge
+      POSTGRES_DB:       pharmabridge
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "pharmabridge", "-d", "pharmabridge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pharmanet
+
+  # ── Redis ─────────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: pharmabridge-redis
+    command: redis-server --save 60 1 --maxmemory 128mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - pharmanet
+
+  # ── API Gateway ───────────────────────────────────────────
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: pharmabridge-gateway
+    image: pharmabridge-gateway:dev
+    ports:
+      - "8000:8000"
+    environment:
+      REDIS_URL:         "redis://redis:6379/0"
+      DATABASE_URL:      "postgresql+asyncpg://pharmabridge:pharmabridge@postgres:5432/pharmabridge"
+      FRONTEND_DIR:      "/app/frontend"
+      CORS_ORIGINS:      "http://localhost:8000,http://localhost:3000"
+      USE_MOCK:          "true"
+      GATEWAY_VERSION:   "1.0.0-dev"
+      JSON_LOGS:         "false"
+      LOG_LEVEL:         "INFO"
+      # Auth secrets – DEV ONLY, use K8s Secrets in production
+      JWT_SECRET:        "dev-secret-change-in-production-min-32-chars"
+      ACCESS_TOKEN_TTL_MINUTES: "15"
+      REFRESH_TOKEN_TTL_DAYS:   "7"
+    volumes:
+      # Mount frontend HTML files directly for live editing without rebuild
+      - ./frontend:/app/frontend:ro
+      # Mount gateway source for hot-reload
+      - ./gateway:/app/gateway:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - pharmanet
+    command: >
+      uvicorn main:app
+        --host 0.0.0.0
+        --port 8000
+        --reload
+        --log-level info
+
+  # ── 1mg Worker ────────────────────────────────────────────
+  worker-1mg:
+    build:
+      context: .
+      dockerfile: workers/Dockerfile
+    container_name: pharmabridge-worker-1mg
+    image: pharmabridge-worker:dev
+    command: python worker_1mg.py
+    environment:
+      REDIS_URL:     "redis://redis:6379/0"
+      POD_NAME:      "worker-1mg-local"
+      USE_MOCK:      "true"
+    volumes:
+      - ./gateway/models.py:/app/gateway/models.py:ro
+      - ./workers:/app:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - pharmanet
+    restart: unless-stopped
+
+  # ── PharmEasy Worker ──────────────────────────────────────
+  worker-pharmeasy:
+    build:
+      context: .
+      dockerfile: workers/Dockerfile
+    container_name: pharmabridge-worker-pharmeasy
+    image: pharmabridge-worker:dev
+    command: python worker_pharmeasy.py
+    environment:
+      REDIS_URL:     "redis://redis:6379/0"
+      POD_NAME:      "worker-pharmeasy-local"
+      USE_MOCK:      "true"
+    volumes:
+      - ./gateway/models.py:/app/gateway/models.py:ro
+      - ./workers:/app:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - pharmanet
+    restart: unless-stopped
+
+  # ── Netmeds Worker ────────────────────────────────────────
+  worker-netmeds:
+    build:
+      context: .
+      dockerfile: workers/Dockerfile
+    container_name: pharmabridge-worker-netmeds
+    image: pharmabridge-worker:dev
+    command: python worker_netmeds.py
+    environment:
+      REDIS_URL:     "redis://redis:6379/0"
+      POD_NAME:      "worker-netmeds-local"
+      USE_MOCK:      "true"
+    volumes:
+      - ./gateway/models.py:/app/gateway/models.py:ro
+      - ./workers:/app:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - pharmanet
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  postgres_data:
+
+networks:
+  pharmanet:
+    driver: bridge

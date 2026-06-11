@@ -1,0 +1,395 @@
+# pharmabridge/k8s/minio-deployment.yaml
+# ──────────────────────────────────────────────────────────────────
+# MinIO single-node deployment on K3s / Proxmox.
+#
+# Why single-node?
+#   MinIO distributed mode requires a minimum of 4 nodes for erasure
+#   coding.  On a 3-node homelab, single-node mode is the correct
+#   choice.  The data is protected by:
+#     1. Proxmox RAID / ZFS on the underlying host
+#     2. Nightly rclone sync to Oracle Cloud Free Tier Object Storage
+#
+# Storage layout
+#   MinIO uses one PVC mounted at /data.  Inside that volume, buckets
+#   are top-level directories.  Objects are stored as files under:
+#     /data/{bucket}/{prefix}/{object}
+#   Our prescriptions bucket path:
+#     /data/pharmabridge-prescriptions/prescriptions/{year}/{month}/{uuid}.{ext}
+#
+# Secrets
+#   Create before applying:
+#     kubectl create secret generic pharmabridge-minio-secret \
+#       --from-literal=MINIO_ROOT_USER=pharmabridge \
+#       --from-literal=MINIO_ROOT_PASSWORD=<STRONG_32CHAR_PASSWORD> \
+#       -n pharmabridge
+#
+# Console access (local dev)
+#   kubectl port-forward svc/minio-svc 9001:9001 -n pharmabridge
+#   Then open http://localhost:9001
+# ──────────────────────────────────────────────────────────────────
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: pharmabridge
+  labels:
+    app: minio
+    app.kubernetes.io/component: object-storage
+    app.kubernetes.io/part-of: pharmabridge
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # Single replica + PVC: always Recreate, never RollingUpdate
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path:   "/minio/v2/metrics/cluster"
+        prometheus.io/port:   "9000"
+    spec:
+      containers:
+        - name: minio
+          image: quay.io/minio/minio:RELEASE.2025-05-24T17-08-30Z
+          command:
+            - minio
+            - server
+            - /data
+            - --console-address
+            - ":9001"
+          ports:
+            - name: api
+              containerPort: 9000
+            - name: console
+              containerPort: 9001
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: pharmabridge-minio-secret
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pharmabridge-minio-secret
+                  key: MINIO_ROOT_PASSWORD
+            # Enable Prometheus metrics without auth (scrape is cluster-internal only)
+            - name: MINIO_PROMETHEUS_AUTH_TYPE
+              value: "public"
+            # Audit log to stdout so Promtail/Loki can capture it
+            - name: MINIO_AUDIT_WEBHOOK_ENABLE_STDOUT
+              value: "on"
+            - name: MINIO_AUDIT_WEBHOOK_ENDPOINT_STDOUT
+              value: "http://localhost"   # dummy – enables stdout audit log
+          volumeMounts:
+            - name: minio-data
+              mountPath: /data
+          resources:
+            requests:
+              cpu:    "200m"
+              memory: "256Mi"
+            limits:
+              cpu:    "1000m"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: 9000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: 9000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+
+      volumes:
+        - name: minio-data
+          persistentVolumeClaim:
+            claimName: minio-pvc
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: minio-pvc
+  namespace: pharmabridge
+  annotations:
+    # CRITICAL: Use Retain so the PVC is not deleted when the deployment
+    # is torn down.  Prescription images are patient records.
+    "helm.sh/resource-policy": keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi        # 20GB for prescriptions; upgrade when needed
+  storageClassName: local-path
+  # To use Retain policy explicitly, create a custom StorageClass:
+  # storageClassName: local-path-retain
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-svc
+  namespace: pharmabridge
+  labels:
+    app: minio
+spec:
+  selector:
+    app: minio
+  ports:
+    - name: api
+      port: 9000
+      targetPort: 9000
+    - name: console
+      port: 9001
+      targetPort: 9001
+  type: ClusterIP   # Never expose MinIO directly; gateway proxies uploads
+
+---
+# ── MinIO bucket + policy bootstrap Job ─────────────────────────
+# Runs once after MinIO is healthy to create the prescriptions bucket
+# and set the correct access policy.
+# Uses mc (MinIO Client) to bootstrap idempotently.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-bootstrap
+  namespace: pharmabridge
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mc
+          image: quay.io/minio/mc:RELEASE.2025-05-21T01-59-54Z
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+
+              # Wait for MinIO to be healthy
+              until mc alias set local \
+                http://minio-svc.pharmabridge.svc.cluster.local:9000 \
+                "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do
+                echo "Waiting for MinIO..."
+                sleep 5
+              done
+
+              # Create buckets (idempotent)
+              mc mb --ignore-existing local/pharmabridge-prescriptions
+              mc mb --ignore-existing local/pharmabridge-backups
+
+              # Prescriptions bucket: private (no public access)
+              mc anonymous set none local/pharmabridge-prescriptions
+              mc anonymous set none local/pharmabridge-backups
+
+              # Enable versioning on prescriptions for accidental delete recovery
+              mc version enable local/pharmabridge-prescriptions
+
+              # Lifecycle rule: move objects older than 365 days to GLACIER
+              # (local-path doesn't support tiering, but this is ready for S3 migration)
+              mc ilm rule add \
+                --expire-days 2555 \
+                local/pharmabridge-prescriptions || true
+
+              echo "MinIO bootstrap complete."
+              mc ls local/
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: pharmabridge-minio-secret
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pharmabridge-minio-secret
+                  key: MINIO_ROOT_PASSWORD
+          resources:
+            requests:
+              cpu:    "50m"
+              memory: "64Mi"
+            limits:
+              cpu:    "200m"
+              memory: "128Mi"
+
+---
+# ── Nightly offsite sync to Oracle Cloud Free Tier ──────────────
+# Uses rclone to mirror pharmabridge-prescriptions to OCI Object Storage.
+# OCI Free Tier gives 20GB object storage — enough for ~50k prescriptions.
+#
+# Setup OCI credentials:
+#   kubectl create secret generic pharmabridge-oci-secret \
+#     --from-literal=OCI_NAMESPACE=<your-namespace> \
+#     --from-literal=OCI_BUCKET=pharmabridge-dr \
+#     --from-file=rclone.conf=/path/to/rclone.conf \
+#     -n pharmabridge
+#
+# rclone.conf format:
+#   [oci]
+#   type = s3
+#   provider = Other
+#   env_auth = false
+#   access_key_id = <oci-access-key>
+#   secret_access_key = <oci-secret-key>
+#   endpoint = https://<namespace>.compat.objectstorage.ap-mumbai-1.oraclecloud.com
+#   region = ap-mumbai-1
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: minio-offsite-sync
+  namespace: pharmabridge
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  schedule: "0 2 * * *"        # 2:00 AM IST daily (UTC 20:30 previous day)
+  timeZone: "Asia/Kolkata"
+  concurrencyPolicy: Forbid    # Never run two syncs simultaneously
+  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: rclone
+              image: rclone/rclone:1.67
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Starting offsite sync..."
+
+                  # Sync prescriptions bucket to OCI
+                  rclone sync \
+                    :s3,provider=Minio,endpoint=http://minio-svc.pharmabridge.svc.cluster.local:9000,access_key_id=$MINIO_ROOT_USER,secret_access_key=$MINIO_ROOT_PASSWORD:pharmabridge-prescriptions \
+                    oci:$OCI_BUCKET/prescriptions \
+                    --config /rclone/rclone.conf \
+                    --transfers 4 \
+                    --checkers 8 \
+                    --stats 60s \
+                    --log-level INFO
+
+                  echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Sync complete."
+              env:
+                - name: MINIO_ROOT_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: pharmabridge-minio-secret
+                      key: MINIO_ROOT_USER
+                - name: MINIO_ROOT_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: pharmabridge-minio-secret
+                      key: MINIO_ROOT_PASSWORD
+                - name: OCI_BUCKET
+                  valueFrom:
+                    secretKeyRef:
+                      name: pharmabridge-oci-secret
+                      key: OCI_BUCKET
+              volumeMounts:
+                - name: rclone-config
+                  mountPath: /rclone
+                  readOnly: true
+              resources:
+                requests:
+                  cpu:    "100m"
+                  memory: "128Mi"
+                limits:
+                  cpu:    "500m"
+                  memory: "256Mi"
+          volumes:
+            - name: rclone-config
+              secret:
+                secretName: pharmabridge-oci-secret
+                items:
+                  - key: rclone.conf
+                    path: rclone.conf
+
+---
+# ── Upload Reaper CronJob ─────────────────────────────────
+# Runs daily at 03:00 IST (21:30 UTC) — after the MinIO offsite sync
+# (02:00 IST) completes, so offsite backups capture even abandoned uploads
+# before they are purged.
+#
+# The reaper uses the same gateway image (has access to db/ and storage.py).
+# Environment:
+#   ABANDON_AGE_HOURS  default 24 — rows in UPLOADED state older than this
+#   DRY_RUN            set "true" for a test run that logs without deleting
+#   REAPER_BATCH_SIZE  default 100 — rows per DB query
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: prescription-upload-reaper
+  namespace: pharmabridge
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  schedule: "30 21 * * *"      # 03:00 IST = 21:30 UTC
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 7    # keep a week of failed runs for debugging
+  successfulJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1          # one retry; if it fails twice, alert fires
+      activeDeadlineSeconds: 3600  # kill after 1 hour (safety net)
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: reaper
+              image: bodapati88/pharmabridge-gateway:latest
+              command: ["python", "/app/workers/reaper.py"]
+              envFrom:
+                - configMapRef:
+                    name: pharmabridge-config
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: pharmabridge-db-secret
+                      key: DATABASE_URL
+                - name: MINIO_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: pharmabridge-minio-secret
+                      key: MINIO_ROOT_USER
+                - name: MINIO_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: pharmabridge-minio-secret
+                      key: MINIO_ROOT_PASSWORD
+                - name: ABANDON_AGE_HOURS
+                  value: "24"
+                - name: DRY_RUN
+                  value: "false"    # Set "true" for first deployment to audit scope
+              resources:
+                requests:
+                  cpu:    "50m"
+                  memory: "128Mi"
+                limits:
+                  cpu:    "200m"
+                  memory: "256Mi"

@@ -1,0 +1,162 @@
+# pharmabridge/k8s/gateway-deployment.yaml
+# ─────────────────────────────────────────
+# API Gateway: 2 replicas for availability.
+# HPA kicks in above 70% CPU to scale to max 5.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pharmabridge-gateway
+  namespace: pharmabridge
+  labels:
+    app: pharmabridge-gateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: pharmabridge
+  annotations:
+    # ArgoCD will watch this manifest in your infra-homelab repo
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pharmabridge-gateway
+  template:
+    metadata:
+      labels:
+        app: pharmabridge-gateway
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path:   "/metrics"
+        prometheus.io/port:   "8000"
+    spec:
+      # Prefer spreading across nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: pharmabridge-gateway
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: gateway
+          image: bodapati88/pharmabridge-gateway:latest   # Docker Hub image
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: pharmabridge-config
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: pharmabridge-app-secret
+                  key: JWT_SECRET
+            - name: ACCESS_TOKEN_TTL_MINUTES
+              valueFrom:
+                secretKeyRef:
+                  name: pharmabridge-app-secret
+                  key: ACCESS_TOKEN_TTL_MINUTES
+            - name: REFRESH_TOKEN_TTL_DAYS
+              valueFrom:
+                secretKeyRef:
+                  name: pharmabridge-app-secret
+                  key: REFRESH_TOKEN_TTL_DAYS
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: pharmabridge-db-secret
+                  key: DATABASE_URL
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pharmabridge-minio-secret
+                  key: MINIO_ROOT_USER
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pharmabridge-minio-secret
+                  key: MINIO_ROOT_PASSWORD
+          volumeMounts:
+            - name: frontend-static
+              mountPath: /app/frontend
+              readOnly: true
+          resources:
+            requests:
+              cpu:    "200m"
+              memory: "256Mi"
+            limits:
+              cpu:    "1000m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            failureThreshold: 3
+
+      volumes:
+        - name: frontend-static
+          configMap:
+            name: pharmabridge-frontend   # Created by: kubectl create configmap
+                                          # pharmabridge-frontend --from-file=frontend/
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pharmabridge-gateway-svc
+  namespace: pharmabridge
+  labels:
+    app: pharmabridge-gateway
+spec:
+  selector:
+    app: pharmabridge-gateway
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
+  type: ClusterIP
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pharmabridge-gateway-hpa
+  namespace: pharmabridge
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pharmabridge-gateway
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

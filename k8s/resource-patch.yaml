@@ -1,0 +1,41 @@
+# pharmabridge/k8s/resource-patch.yaml
+# ─────────────────────────────────────────────────────────────────
+# Strategic merge patches to apply resource limits and inject secrets
+# across all deployments.
+#
+# Apply with:
+#   kubectl patch deployment pharmabridge-gateway -n pharmabridge \
+#     --patch-file k8s/resource-patch.yaml
+#
+# Or reference from ArgoCD Application kustomize patches.
+#
+# These ensure no single pod can starve your 16GB homelab.
+# ─────────────────────────────────────────────────────────────────
+
+# This file documents the intended resource profile.
+# The actual limits are already set in each deployment YAML.
+# Review this when scaling:
+
+# Gateway (2 replicas):
+#   requests: cpu=200m, memory=256Mi  → 400m cpu, 512Mi total
+#   limits:   cpu=1000m, memory=512Mi → burst to 2 cores, 1Gi total
+
+# Workers - 1mg (2 replicas, Playwright):
+#   requests: cpu=300m, memory=512Mi  → 600m cpu, 1Gi total
+#   limits:   cpu=1500m, memory=1Gi  → burst to 3 cores, 2Gi total
+
+# Workers - pharmeasy/netmeds (2 replicas each, HTTP only):
+#   requests: cpu=100m, memory=128Mi  → 200m cpu, 256Mi each
+#   limits:   cpu=500m, memory=256Mi  → burst to 1 core, 512Mi each
+
+# Redis (1 replica):
+#   requests: cpu=100m, memory=128Mi
+#   limits:   cpu=500m, memory=300Mi  (+ 256MB maxmemory in redis.conf)
+
+# PostgreSQL (1 replica):
+#   requests: cpu=250m, memory=512Mi
+#   limits:   cpu=1000m, memory=1Gi
+
+# Total cluster footprint (worst-case all at limits):
+#   CPU:    1000+3000+1000+500+500+1000+500 = ~7.5 cores  (comfortable on 3-node K3s)
+#   Memory: 512+2048+512+512+300+1024 = ~5Gi              (well under 16GB)

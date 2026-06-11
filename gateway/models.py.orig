@@ -1,0 +1,210 @@
+"""
+pharmabridge/gateway/models.py
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Pydantic v2 schemas for every request/response in the PharmaBridge API.
+Centralising models here keeps main.py clean and makes validation logic
+reusable from the worker layer without circular imports.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from enum import Enum
+from typing import Optional
+
+from pydantic import BaseModel, Field, field_validator
+
+
+# ─────────────────────────────────────────────
+# Enumerations
+# ─────────────────────────────────────────────
+
+class VendorName(str, Enum):
+    """All supported pharmacy vendors.  New vendors must be added here
+    before a worker can register itself under that key."""
+    ONEmg       = "1mg"
+    PHARMEASY   = "pharmeasy"
+    NETMEDS     = "netmeds"
+    APOLLOPHARM = "apollo"
+
+
+class TaskStatus(str, Enum):
+    PENDING    = "pending"
+    PROCESSING = "processing"
+    DONE       = "done"
+    FAILED     = "failed"
+    CACHED     = "cached"
+
+
+class ScheduleClass(str, Enum):
+    """Indian drug schedule classification."""
+    OTC      = "OTC"         # Over-the-counter
+    H        = "Schedule H"  # Prescription required
+    H1       = "Schedule H1" # Controlled – psychotropic / narcotic
+    X        = "Schedule X"  # Narcotic
+    UNKNOWN  = "unknown"
+
+
+# ─────────────────────────────────────────────
+# Prescription / Search models
+# ─────────────────────────────────────────────
+
+class MedicineItem(BaseModel):
+    """A single line item from a patient's prescription."""
+    name     : str            = Field(..., min_length=2, max_length=200,
+                                       description="Generic or brand name of the medicine")
+    quantity : int            = Field(..., ge=1, le=500,
+                                       description="Number of STRIPS required (not individual "
+                                                    "tablets/units). All downstream pricing "
+                                                    "(line_total, mrp_total) is computed as "
+                                                    "strip-price * quantity.")
+    strength : Optional[str] = Field(None, example="500mg",
+                                      description="Dose strength, if specified on prescription")
+    dosage_form: Optional[str] = Field(None, example="tablet",
+                                        description="tablet | capsule | syrup | injection | cream")
+
+    @field_validator("name")
+    @classmethod
+    def strip_whitespace(cls, v: str) -> str:
+        return v.strip()
+
+
+class SearchRequest(BaseModel):
+    """Inbound payload from the consumer frontend → POST /api/v1/search"""
+    medicines : list[MedicineItem] = Field(..., min_length=1, max_length=20)
+    pincode   : str                = Field(..., pattern=r"^\d{6}$",
+                                            description="6-digit Indian PIN code for local availability")
+    vendors   : list[VendorName]   = Field(
+        default=[VendorName.ONEmg, VendorName.PHARMEASY, VendorName.NETMEDS],
+        description="Subset of vendors to query.  Default: all three."
+    )
+    prefer_generic : bool = Field(
+        default=False,
+        description="If True, bias Smart-Split towards generic alternatives"
+    )
+
+
+class SearchInitResponse(BaseModel):
+    """Returned immediately after /api/v1/search to give the client a
+    task_id it can poll.  Jobs are fanned out to workers asynchronously."""
+    task_id    : str
+    status     : TaskStatus = TaskStatus.PENDING
+    vendor_count: int
+    message    : str        = "Search dispatched.  Poll /api/v1/result/{task_id} for results."
+    queued_at  : datetime
+
+
+# ─────────────────────────────────────────────
+# Worker result models
+# ─────────────────────────────────────────────
+
+class VendorMedicineResult(BaseModel):
+    """A single medicine's pricing from one vendor, as returned by a worker."""
+    medicine_name  : str
+    vendor         : VendorName
+    brand_name     : str
+    generic_name   : Optional[str]   = None
+    manufacturer   : Optional[str]   = None
+    price_per_unit : float           = Field(..., ge=0,
+                                              description="Price per tablet/ml/g in INR")
+    price_per_strip: Optional[float] = Field(None, ge=0,
+                                              description="Price per strip (10-tab etc.) in INR")
+    strip_size     : Optional[int]   = Field(None, ge=1,
+                                              description="Tablets per strip")
+    mrp            : float           = Field(..., ge=0, description="Maximum Retail Price in INR")
+    discount_pct   : float           = Field(0.0, ge=0, le=100)
+    in_stock       : bool            = True
+    schedule       : ScheduleClass   = ScheduleClass.UNKNOWN
+    requires_rx    : bool            = False
+    product_url    : Optional[str]   = None
+    image_url      : Optional[str]   = None
+    scraped_at     : datetime
+
+
+class VendorBatchResult(BaseModel):
+    """Everything a single worker publishes back to Redis after a run."""
+    task_id   : str
+    vendor    : VendorName
+    status    : TaskStatus
+    results   : list[VendorMedicineResult] = []
+    error_msg : Optional[str]             = None
+    duration_ms: Optional[float]          = None
+
+
+# ─────────────────────────────────────────────
+# Smart-Split / aggregated result models
+# ─────────────────────────────────────────────
+
+class CartLineItem(BaseModel):
+    """One medicine line in the recommended split-cart."""
+    medicine_name  : str
+    vendor         : VendorName
+    brand_name     : str
+    quantity_needed: int
+    unit_price     : float   # price per STRIP (matches quantity_needed units), not per tablet
+    line_total     : float
+    mrp_total      : float
+    saving         : float
+    saving_pct     : float
+    requires_rx    : bool
+    schedule       : ScheduleClass
+
+
+class VendorSubCart(BaseModel):
+    """All items assigned to a single vendor in the optimal split."""
+    vendor           : VendorName
+    items            : list[CartLineItem]
+    subtotal         : float    # medicine cost + delivery charge
+    delivery_charge  : float = 0.0  # actual delivery fee after free-threshold check
+    mrp_total        : float
+    subtotal_saving  : float
+
+
+class SmartSplitResult(BaseModel):
+    """Full optimised cart recommendation from the Smart-Split algorithm."""
+    task_id            : str
+    vendor_carts       : list[VendorSubCart]
+    grand_total        : float
+    grand_mrp_total    : float
+    total_saving       : float
+    total_saving_pct   : float
+    single_vendor_total: float   # Cost if bought from the cheapest single vendor
+    split_advantage    : float   # Extra saving gained specifically by splitting
+    medicines_not_found: list[str] = []
+    rx_medicines       : list[str] = []  # Medicines flagged Schedule H/H1
+    computed_at        : datetime
+
+
+class SearchResultResponse(BaseModel):
+    """Polled from GET /api/v1/result/{task_id}."""
+    task_id        : str
+    status         : TaskStatus
+    vendors_pending: list[VendorName] = []
+    vendors_done   : list[VendorName] = []
+    vendors_failed : list[VendorName] = []
+    smart_split    : Optional[SmartSplitResult] = None
+    raw_results    : Optional[list[VendorBatchResult]] = None
+    cache_hit      : bool = False
+    error          : Optional[str] = None
+
+
+# ─────────────────────────────────────────────
+# Health / Operator models
+# ─────────────────────────────────────────────
+
+class WorkerHeartbeat(BaseModel):
+    """Workers publish this to redis heartbeat channel every 30 s."""
+    vendor    : VendorName
+    pod_name  : str
+    status    : str   # "idle" | "busy" | "error"
+    tasks_done: int
+    uptime_s  : float
+    timestamp : datetime
+
+
+class GatewayHealthResponse(BaseModel):
+    status        : str = "ok"
+    redis_ok      : bool
+    workers_alive : dict[str, bool]  # vendor_name → alive
+    version       : str = "1.0.0"
+    timestamp     : datetime
