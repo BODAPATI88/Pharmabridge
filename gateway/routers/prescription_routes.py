@@ -654,7 +654,6 @@ async def reject_prescription(
                  rejection_reason=req.rejection_reason,
                  notes=req.notes, request=request)
     return _to_response(await repo.get_by_id(prescription_id))
-    logger.info("prescription_rejected prescription_id=%s reason=%s", prescription_id[:8], req.rejection_reason)
 # ─────────────────────────────────────────────────────────
 # Operator: release lock without decision
 # ─────────────────────────────────────────────────────────
