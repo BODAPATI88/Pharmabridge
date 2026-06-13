@@ -46,12 +46,14 @@ class UserRepository:
     async def create(
         self,
         phone_number: str,
+        password_hash: Optional[str] = None,
         full_name   : Optional[str]  = None,
         email       : Optional[str]  = None,
         pincode     : Optional[str]  = None,
     ) -> User:
         user = User(
             phone_number = phone_number,
+            password_hash = password_hash,
             full_name    = full_name,
             email        = email,
             pincode      = pincode,

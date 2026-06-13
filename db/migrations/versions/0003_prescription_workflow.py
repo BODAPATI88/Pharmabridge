@@ -64,7 +64,13 @@ def upgrade() -> None:
 
     # Add rejection_reason if column is missing from earlier migration
     # Guard with try/except — if it already exists (ORM added it), skip silently
-    try:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_columns = {col["name"] for col in inspector.get_columns("prescriptions")}
+    # rejection_reason already exists from 0001_initial_schema on this DB —
+    # use inspector check instead of try/except, since a failed DDL
+    # statement poisons the whole transaction even if caught.
+    if "rejection_reason" not in existing_columns:
         op.add_column(
             "prescriptions",
             sa.Column(
@@ -77,8 +83,6 @@ def upgrade() -> None:
                 ),
             ),
         )
-    except Exception:
-        pass  # Column already exists from 0001 ORM model
 
     # Rename old 'PENDING' default to 'UPLOADED' to reflect the new state machine.
     # Existing rows in PENDING state are migrated to UPLOADED.

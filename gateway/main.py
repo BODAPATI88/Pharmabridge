@@ -322,40 +322,6 @@ async def queue_depth() -> dict:
 
 from rate_limit import rate_limit_ip, rate_limit_user
 
-@app.post(
-    "/api/v1/search",
-    response_model = SearchInitResponse,
-    status_code    = status.HTTP_202_ACCEPTED,
-    tags           = ["Search"],
-    dependencies   = [
-        Depends(rate_limit_ip("search")),
-        Depends(rate_limit_user("search_user")),
-    ],
-)
-async def submit_search(
-    req  : SearchRequest,
-    token: Optional[TokenPayload] = Depends(
-        # Optional auth – anonymous searches allowed for demo
-        lambda credentials=Depends(__import__("fastapi.security", fromlist=["HTTPBearer"])
-                                   .HTTPBearer(auto_error=False)):
-        None  # replaced below
-    ),
-) -> SearchInitResponse:
-    # Re-implement optional auth properly
-    return await _submit_search_impl(req, user_id=None)
-
-
-# The decorator approach above doesn't handle optional auth cleanly.
-# Use a clean implementation pattern instead:
-
-@app.post(
-    "/api/v1/search",
-    response_model = SearchInitResponse,
-    status_code    = status.HTTP_202_ACCEPTED,
-    tags           = ["Search"],
-    include_in_schema = False,  # shadow — real one below
-)
-async def _search_placeholder(): pass  # pragma: no cover
 
 
 # Override with properly typed implementation
