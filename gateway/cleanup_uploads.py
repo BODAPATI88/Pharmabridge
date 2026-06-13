@@ -64,7 +64,8 @@ logging.basicConfig(
     level  = logging.INFO,
     format = "%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
 )
-logger = logging.getLogger("pharmabridge.cleanup")
+from logging_config import get_logger
+logger = get_logger("pharmabridge.cleanup")
 
 ABANDON_HOURS = int(os.getenv("UPLOAD_ABANDON_HOURS", "24"))
 DRY_RUN       = os.getenv("DRY_RUN", "false").lower() == "true"
