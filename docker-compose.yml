@@ -13,6 +13,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: pharmabridge-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER:     pharmabridge
       POSTGRES_PASSWORD: pharmabridge
@@ -33,6 +34,7 @@ services:
   redis:
     image: redis:7.2-alpine
     container_name: pharmabridge-redis
+    restart: unless-stopped
     command: redis-server --save 60 1 --maxmemory 128mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
@@ -69,6 +71,7 @@ services:
       context: .
       dockerfile: gateway/Dockerfile
     container_name: pharmabridge-gateway
+    restart: unless-stopped
     image: pharmabridge-gateway:dev
     ports:
       - "8000:8000"

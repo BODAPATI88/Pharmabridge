@@ -548,7 +548,7 @@ async def get_result(task_id: str) -> SearchResultResponse:
             s_repo = SearchRepository(db)
             await s_repo.complete(
                 search_id          = task_id,
-                smart_split_result = smart_split.model_dump(),
+                smart_split_result = smart_split.model_dump(mode="json"),
                 grand_total        = smart_split.grand_total,
                 total_saving       = smart_split.total_saving,
                 duration_ms        = duration_ms,
@@ -558,7 +558,7 @@ async def get_result(task_id: str) -> SearchResultResponse:
                     search_id   = task_id,
                     vendor      = batch.vendor.value,
                     status      = batch.status.value,
-                    raw_results = batch.model_dump(),
+                    raw_results = batch.model_dump(mode="json"),
                     duration_ms = batch.duration_ms,
                     error_msg   = batch.error_msg,
                 )
