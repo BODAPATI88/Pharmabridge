@@ -91,7 +91,7 @@ services:
       MINIO_REGION: "us-east-1"
       MINIO_PRESCS_BUCKET: "pharmabridge-prescriptions"
       # Auth secrets – DEV ONLY, use K8s Secrets in production
-      JWT_SECRET:        "dev-secret-change-in-production-min-32-chars"
+      JWT_SECRET:        "${JWT_SECRET}"
       ACCESS_TOKEN_TTL_MINUTES: "1440"
       REFRESH_TOKEN_TTL_DAYS:   "7"
     volumes:
