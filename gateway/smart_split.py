@@ -319,7 +319,7 @@ def compute_smart_split(
         delivery     = rule.effective_delivery(med_subtotal)
         subtotal     = round(med_subtotal + delivery, 2)
         mrp_total    = round(sum(i.mrp_total for i in items), 2)
-        sub_saving   = round(mrp_total - subtotal, 2)
+        sub_saving   = round(mrp_total - med_subtotal, 2)
         med_saving   = round(mrp_total - med_subtotal, 2)
 
         vendor_carts.append(VendorSubCart(
