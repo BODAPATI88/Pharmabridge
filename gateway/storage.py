@@ -63,6 +63,7 @@ logger = logging.getLogger("pharmabridge.storage")
 # ─────────────────────────────────────────────────────────
 
 MINIO_ENDPOINT_URL  = os.getenv("MINIO_ENDPOINT_URL",  "http://minio-svc.pharmabridge.svc.cluster.local:9000")
+MINIO_PUBLIC_ENDPOINT_URL = os.getenv("MINIO_PUBLIC_ENDPOINT_URL", MINIO_ENDPOINT_URL)  # used only for presigned URLs returned to clients
 MINIO_ACCESS_KEY    = os.getenv("MINIO_ACCESS_KEY",    "pharmabridge")
 MINIO_SECRET_KEY    = os.getenv("MINIO_SECRET_KEY",    "CHANGE_ME_IN_PRODUCTION")
 MINIO_REGION        = os.getenv("MINIO_REGION",        "us-east-1")   # MinIO ignores this, S3 needs it
@@ -166,6 +167,22 @@ def _make_client_context():
     )
 
 
+def _make_presign_client_context():
+    """
+    Like _make_client_context(), but signs URLs against
+    MINIO_PUBLIC_ENDPOINT_URL so presigned URLs are reachable by
+    external clients (browsers, mobile apps), not just other containers.
+    """
+    session = aiobotocore.session.get_session()
+    return session.create_client(
+        "s3",
+        endpoint_url          = MINIO_PUBLIC_ENDPOINT_URL,
+        aws_access_key_id     = MINIO_ACCESS_KEY,
+        aws_secret_access_key = MINIO_SECRET_KEY,
+        region_name           = MINIO_REGION,
+    )
+
+
 # ─────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────
@@ -214,7 +231,7 @@ async def generate_upload_url(
     key = build_storage_key(prescription_id, content_type, upload_time)
 
     try:
-        async with _make_client_context() as s3:
+        async with _make_presign_client_context() as s3:
             url = await s3.generate_presigned_url(
                 "put_object",
                 Params={
@@ -226,10 +243,10 @@ async def generate_upload_url(
             )
 
         logger.info(
-            "presigned_put_generated",
-            prescription_id = prescription_id[:8],
-            key             = key,
-            content_type    = content_type,
+            "presigned_put_generated prescription_id=%s key=%s content_type=%s",
+            prescription_id[:8],
+            key,
+            content_type,
         )
         return {
             "storage_key" : key,
@@ -240,7 +257,7 @@ async def generate_upload_url(
         }
 
     except ClientError as exc:
-        logger.error("presigned_put_failed", error=str(exc), prescription_id=prescription_id[:8])
+        logger.error("presigned_put_failed error=%s prescription_id=%s", str(exc), prescription_id[:8])
         raise RuntimeError(f"Storage service unavailable: {exc}") from exc
 
 
@@ -259,7 +276,7 @@ async def generate_download_url(storage_key: str) -> str:
         Presigned HTTPS URL string.
     """
     try:
-        async with _make_client_context() as s3:
+        async with _make_presign_client_context() as s3:
             url = await s3.generate_presigned_url(
                 "get_object",
                 Params={
@@ -270,7 +287,7 @@ async def generate_download_url(storage_key: str) -> str:
             )
         return url
     except ClientError as exc:
-        logger.error("presigned_get_failed", key=storage_key, error=str(exc))
+        logger.error("presigned_get_failed key=%s error=%s", storage_key, str(exc))
         raise RuntimeError(f"Could not generate download URL: {exc}") from exc
 
 
@@ -285,11 +302,10 @@ async def delete_object(storage_key: str) -> None:
     try:
         async with _make_client_context() as s3:
             await s3.delete_object(Bucket=PRESCRIPTIONS_BUCKET, Key=storage_key)
-        logger.info("object_deleted", key=storage_key)
+        logger.info("object_deleted key=%s", storage_key)
     except ClientError as exc:
-        logger.error("object_delete_failed", key=storage_key, error=str(exc))
-        raise RuntimeError(f"Delete failed: {exc}") from exc
-
+        logger.error("object_delete_failed key=%s error=%s", storage_key, str(exc))
+        raise RuntimeError(f"Could not delete object: {exc}") from exc
 
 async def object_exists(storage_key: str) -> bool:
     """
