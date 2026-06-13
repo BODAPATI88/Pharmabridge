@@ -255,8 +255,11 @@ async def get_upload_url(
     except (ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+    presc.verification_status = "UPLOADED"
+    await db.flush()
+
     await _audit(db, presc.id, token.sub, "patient", "UPLOADED", None, "UPLOADED")
-    logger.info("upload_url_issued", prescription_id=presc.id[:8], key=real_key)
+    logger.info("upload_url_issued prescription_id=%s key=%s", presc.id[:8], real_key)
 
     return UploadUrlResponse(
         prescription_id = presc.id,
@@ -334,8 +337,7 @@ async def confirm_upload(
 
     await _audit(db, presc.id, token.sub, "patient",
                  "PENDING_REVIEW", from_status, "PENDING_REVIEW", request=request)
-    logger.info("prescription_confirmed", prescription_id=presc.id[:8],
-                actual_bytes=actual, key=presc.storage_key)
+    logger.info("prescription_confirmed prescription_id=%s actual_bytes=%s key=%s", presc.id[:8], actual, presc.storage_key)
     return _to_response(presc)
 
 
@@ -499,8 +501,7 @@ async def claim_review(
 
     await _audit(db, prescription_id, token.sub, "operator",
                  "REVIEW_CLAIMED", from_status, "UNDER_REVIEW", request=request)
-    logger.info("review_claimed", prescription_id=prescription_id[:8],
-                operator=token.sub[:8], expires_at=expiry.isoformat())
+    logger.info("review_claimed prescription_id=%s operator=%s expires_at=%s", prescription_id[:8], token.sub[:8], expiry.isoformat())
     return _to_response(presc)
 
 
@@ -616,10 +617,8 @@ async def approve_prescription(
     await _audit(db, prescription_id, token.sub, "operator",
                  "APPROVED", from_status, "APPROVED",
                  notes=req.notes, request=request)
-    logger.info("prescription_approved", prescription_id=prescription_id[:8],
-                operator=token.sub[:8], expires_at=expires_at.isoformat())
-    return _to_response(await repo.get_by_id(prescription_id))
-
+    logger.info("prescription_approved prescription_id=%s operator=%s expires_at=%s", prescription_id[:8], token.sub[:8], expires_at.isoformat())
+    return _to_response(presc)
 
 # ─────────────────────────────────────────────────────────
 # Operator: reject
@@ -654,11 +653,8 @@ async def reject_prescription(
                  "REJECTED", from_status, "REJECTED",
                  rejection_reason=req.rejection_reason,
                  notes=req.notes, request=request)
-    logger.info("prescription_rejected", prescription_id=prescription_id[:8],
-                reason=req.rejection_reason)
     return _to_response(await repo.get_by_id(prescription_id))
-
-
+    logger.info("prescription_rejected prescription_id=%s reason=%s", prescription_id[:8], req.rejection_reason)
 # ─────────────────────────────────────────────────────────
 # Operator: release lock without decision
 # ─────────────────────────────────────────────────────────
