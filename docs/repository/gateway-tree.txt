@@ -1,0 +1,38 @@
+gateway
+├── Dockerfile
+├── Dockerfile.bak
+├── Dockerfile.pre-router-fix
+├── __pycache__
+│   ├── auth.cpython-312.pyc
+│   ├── cleanup_uploads.cpython-312.pyc
+│   ├── logging_config.cpython-312.pyc
+│   ├── main.cpython-312.pyc
+│   ├── models.cpython-312.pyc
+│   ├── rate_limit.cpython-312.pyc
+│   ├── smart_split.cpython-312.pyc
+│   └── storage.cpython-312.pyc
+├── auth.py
+├── cleanup_uploads.py
+├── logging_config.py
+├── logging_config.py.bak
+├── main.py
+├── main.py.bak
+├── models.py
+├── models.py.bak
+├── models.py.orig
+├── models.py.pre0005
+├── rate_limit.py
+├── requirements.txt
+├── routers
+│   ├── __pycache__
+│   │   ├── auth_routes.cpython-312.pyc
+│   │   └── prescription_routes.cpython-312.pyc
+│   ├── auth_routes.py
+│   └── prescription_routes.py
+├── smart_split.py
+├── smart_split.py.bak
+├── smart_split.py.orig
+├── smart_split.py.pre0005
+└── storage.py
+
+4 directories, 32 files

@@ -1,0 +1,16 @@
+=== DATABASE MIGRATIONS ===
+total 48K
+drwxr-xr-x 3 ravi ravi 4.0K Jun 12 05:25 .
+drwxr-xr-x 4 ravi ravi 4.0K Jun  9 04:16 ..
+-rw-r--r-- 1 ravi ravi  11K Jun  7 01:30 0001_initial_schema.py
+-rw-r--r-- 1 ravi ravi 3.1K Jun  7 08:55 0002_add_vendors_and_seeds.py
+-rw-rw-r-- 1 ravi ravi 9.5K Jun 12 05:33 0003_prescription_workflow.py
+-rw-r--r-- 1 ravi ravi 6.1K Jun  7 22:52 0004_rbac_and_lock_timeout.py
+drwxrwxr-x 2 ravi ravi 4.0K Jun 12 04:13 __pycache__
+
+=== MIGRATION HEADERS ===
+db/migrations/versions/0001_initial_schema.py:revision = "0001_initial_schema"
+db/migrations/versions/0001_initial_schema.py:down_revision = None
+db/migrations/versions/0004_rbac_and_lock_timeout.py:down_revision = "0003_prescription_workflow"
+db/migrations/versions/0002_add_vendors_and_seeds.py:down_revision = "0001_initial_schema"
+db/migrations/versions/0003_prescription_workflow.py:down_revision = "0002_add_vendors_and_seeds"

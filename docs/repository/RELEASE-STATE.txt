@@ -1,0 +1,33 @@
+=== CURRENT BRANCH ===
+audit/repository-baseline
+
+=== TAGS ===
+netmeds-api-discovered
+netmeds-investigation-complete
+netmeds-json-api-working
+v4.2-pre-netmeds-api
+v4.4-netmeds-live
+v4.4.0-stable
+v4.4.1-workflow-validated
+v4.4.2-minio-public-endpoint
+v4.4.3-release-candidate
+v4.4.4-search-persistence-fixed
+v4.4.5-deployable
+
+=== LAST 30 COMMITS ===
+1d1ae6a (HEAD -> audit/repository-baseline, origin/audit/repository-baseline) audit: repository baseline before beta remediation
+5d44422 (origin/release/v4.4-netmeds-live, release/v4.4-netmeds-live, fix/security-hardening) fix(reaper): use structured logger for cleanup job
+4011140 fix(smart-split): correct subtotal_saving formula (PB-012)
+3be771a (tag: v4.4.5-deployable) security: move JWT_SECRET to .env, remove placeholder dev secret from repo
+b292cfd (tag: v4.4.4-search-persistence-fixed) fix(search): persist vendor batch results correctly (PB-011)
+b146aa0 (tag: v4.4.3-release-candidate) chore(git): ignore local release artifacts
+d20542a fix(auth,migrations,api): remove duplicate search route and harden workflow upgrades
+681b84b chore(prescriptions): remove unreachable reject logger
+477e5a9 (tag: v4.4.2-minio-public-endpoint) fix(storage): support public MinIO presigned URLs (PB-006)
+901f581 (tag: v4.4.1-workflow-validated) fix(prescription-workflow): resolve claim/approve crashes (PB-001, PB-007, PB-008)
+ae3cee9 (tag: v4.4.0-stable, tag: v4.4-netmeds-live, tag: netmeds-json-api-working, origin/feature/netmeds-json-api, feature/netmeds-json-api) feat: migrate netmeds worker to json api
+81e70c4 test: enable live netmeds validation
+63d6a3a (tag: netmeds-investigation-complete, feature/netmeds-api-discovery) docs: record netmeds worker migration status
+9694d05 docs: preserve netmeds api discovery artifacts
+068dfe1 (tag: v4.2-pre-netmeds-api, tag: netmeds-api-discovered, release/v4.3.3-live-vendor, chore/repo-cleanup) Remove virtual environment from repository
+41f4e77 (master) v4.3.2 financial engine stabilized

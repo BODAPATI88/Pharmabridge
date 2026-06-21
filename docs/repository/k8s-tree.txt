@@ -1,0 +1,14 @@
+k8s
+├── cleanup-cronjob.yaml
+├── configmap.yaml
+├── gateway-deployment.yaml
+├── ingress.yaml
+├── minio-deployment.yaml
+├── namespace.yaml
+├── postgres-deployment.yaml
+├── redis-deployment.yaml
+├── resource-patch.yaml
+├── secrets.yaml
+└── workers-deployment.yaml
+
+1 directory, 11 files

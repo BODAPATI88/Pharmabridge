@@ -1,0 +1,22 @@
+=== ROUTES ===
+gateway/routers/prescription_routes.py:async def _audit(
+gateway/routers/prescription_routes.py:async def _release_expired_lock(
+gateway/routers/prescription_routes.py:async def get_upload_url(
+gateway/routers/prescription_routes.py:async def confirm_upload(
+gateway/routers/prescription_routes.py:async def list_prescriptions(
+gateway/routers/prescription_routes.py:async def get_prescription(
+gateway/routers/prescription_routes.py:async def operator_queue(
+gateway/routers/prescription_routes.py:async def claim_review(
+gateway/routers/prescription_routes.py:async def session_heartbeat(
+gateway/routers/prescription_routes.py:async def approve_prescription(
+gateway/routers/prescription_routes.py:async def reject_prescription(
+gateway/routers/prescription_routes.py:async def release_review(
+gateway/routers/auth_routes.py:async def _get_redis():
+gateway/routers/auth_routes.py:async def register(
+gateway/routers/auth_routes.py:async def send_otp(req: SendOTPRequest) -> MessageResponse:
+gateway/routers/auth_routes.py:async def verify_otp_route(
+gateway/routers/auth_routes.py:async def login(
+gateway/routers/auth_routes.py:async def refresh_token(
+gateway/routers/auth_routes.py:async def logout(
+gateway/routers/auth_routes.py:async def get_me(
+gateway/routers/auth_routes.py:async def bootstrap_admin(

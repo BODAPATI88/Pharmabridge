@@ -1,0 +1,190 @@
+=== K8S DESCRIBE PODS ===
+Name:             gateway-5fbcd8d474-psspt
+Namespace:        pharmabridge
+Priority:         0
+Service Account:  default
+Node:             k8s-worker1/192.168.29.101
+Start Time:       Fri, 12 Jun 2026 03:40:34 +0000
+Labels:           app=gateway
+                  pod-template-hash=5fbcd8d474
+Annotations:      kubectl.kubernetes.io/restartedAt: 2026-06-11T15:34:27Z
+Status:           Running
+IP:               10.42.1.250
+IPs:
+  IP:           10.42.1.250
+Controlled By:  ReplicaSet/gateway-5fbcd8d474
+Containers:
+  gateway:
+    Container ID:   containerd://52c45d8afdfae61fa7dcd4717e5c55cef17e179bf01c6e8e6261bfec2cb41037
+    Image:          pharmabridge-gateway:v0.8
+    Image ID:       sha256:d454b5f0134c6aa23393412cdf861f8f1dd9c2fd0ba646302a39f7f65d002dbd
+    Port:           8000/TCP
+    Host Port:      0/TCP
+    State:          Running
+      Started:      Sun, 21 Jun 2026 02:47:50 +0000
+    Last State:     Terminated
+      Reason:       Unknown
+      Exit Code:    255
+      Started:      Sat, 20 Jun 2026 22:43:03 +0000
+      Finished:     Sun, 21 Jun 2026 02:47:37 +0000
+    Ready:          True
+    Restart Count:  17
+    Limits:
+      cpu:     300m
+      memory:  256Mi
+    Requests:
+      cpu:     100m
+      memory:  128Mi
+    Environment:
+      DATABASE_URL:  <set to the key 'DATABASE_URL' in secret 'gateway-secret'>  Optional: false
+      REDIS_URL:     <set to the key 'REDIS_URL' in secret 'gateway-secret'>     Optional: false
+      JWT_SECRET:    <set to the key 'JWT_SECRET' in secret 'gateway-secret'>    Optional: false
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-hjmsm (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True 
+  Initialized                 True 
+  Ready                       True 
+  ContainersReady             True 
+  PodScheduled                True 
+Volumes:
+  kube-api-access-hjmsm:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   Burstable
+Node-Selectors:              pharmabridge-role=app
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:                      <none>
+
+
+Name:             postgres-9cf64c688-mlrtj
+Namespace:        pharmabridge
+Priority:         0
+Service Account:  default
+Node:             k8s-worker1/192.168.29.101
+Start Time:       Thu, 11 Jun 2026 12:55:36 +0000
+Labels:           app=postgres
+                  pod-template-hash=9cf64c688
+Annotations:      <none>
+Status:           Running
+IP:               10.42.1.254
+IPs:
+  IP:           10.42.1.254
+Controlled By:  ReplicaSet/postgres-9cf64c688
+Containers:
+  postgres:
+    Container ID:   containerd://ba73007de4c062c940bea85b5df3bd0e5b6d1f6abc9926978ca5385b55cb23e6
+    Image:          postgres:16
+    Image ID:       docker.io/library/postgres@sha256:4b7183ac05f8ef417db21fd72d71047a4238340c261d3cc3ddb6d579ab5071ae
+    Port:           5432/TCP
+    Host Port:      0/TCP
+    State:          Running
+      Started:      Sun, 21 Jun 2026 02:47:52 +0000
+    Last State:     Terminated
+      Reason:       Unknown
+      Exit Code:    255
+      Started:      Sat, 20 Jun 2026 22:43:04 +0000
+      Finished:     Sun, 21 Jun 2026 02:47:37 +0000
+    Ready:          True
+    Restart Count:  17
+    Limits:
+      cpu:     500m
+      memory:  512Mi
+    Requests:
+      cpu:     100m
+      memory:  256Mi
+    Environment:
+      POSTGRES_DB:        <set to the key 'POSTGRES_DB' in secret 'postgres-secret'>        Optional: false
+      POSTGRES_USER:      <set to the key 'POSTGRES_USER' in secret 'postgres-secret'>      Optional: false
+      POSTGRES_PASSWORD:  <set to the key 'POSTGRES_PASSWORD' in secret 'postgres-secret'>  Optional: false
+    Mounts:
+      /var/lib/postgresql/data from postgres-storage (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-mfs7v (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True 
+  Initialized                 True 
+  Ready                       True 
+  ContainersReady             True 
+  PodScheduled                True 
+Volumes:
+  postgres-storage:
+    Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)
+    ClaimName:  postgres-pvc
+    ReadOnly:   false
+  kube-api-access-mfs7v:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   Burstable
+Node-Selectors:              pharmabridge-role=app
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:                      <none>
+
+
+Name:             redis-8f5bbf5d-sdxw4
+Namespace:        pharmabridge
+Priority:         0
+Service Account:  default
+Node:             k8s-worker1/192.168.29.101
+Start Time:       Thu, 11 Jun 2026 12:47:09 +0000
+Labels:           app=redis
+                  pod-template-hash=8f5bbf5d
+Annotations:      <none>
+Status:           Running
+IP:               10.42.1.247
+IPs:
+  IP:           10.42.1.247
+Controlled By:  ReplicaSet/redis-8f5bbf5d
+Containers:
+  redis:
+    Container ID:   containerd://02a595de5e33624c531d01bd18ebad65187b1504ea9ccb32cad0bb62a0009311
+    Image:          redis:7-alpine
+    Image ID:       docker.io/library/redis@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
+    Port:           6379/TCP
+    Host Port:      0/TCP
+    State:          Running
+      Started:      Sun, 21 Jun 2026 02:47:50 +0000
+    Last State:     Terminated
+      Reason:       Unknown
+      Exit Code:    255
+      Started:      Sat, 20 Jun 2026 22:43:04 +0000
+      Finished:     Sun, 21 Jun 2026 02:47:37 +0000
+    Ready:          True
+    Restart Count:  17
+    Limits:
+      cpu:     250m
+      memory:  128Mi
+    Requests:
+      cpu:        50m
+      memory:     64Mi
+    Environment:  <none>
+    Mounts:
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-wcwmg (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True 
+  Initialized                 True 
+  Ready                       True 
+  ContainersReady             True 
+  PodScheduled                True 
+Volumes:
+  kube-api-access-wcwmg:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   Burstable
+Node-Selectors:              pharmabridge-role=app
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:                      <none>
