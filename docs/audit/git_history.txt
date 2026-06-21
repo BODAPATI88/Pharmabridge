@@ -1,0 +1,15 @@
+5d44422 fix(reaper): use structured logger for cleanup job
+4011140 fix(smart-split): correct subtotal_saving formula (PB-012)
+3be771a security: move JWT_SECRET to .env, remove placeholder dev secret from repo
+b292cfd fix(search): persist vendor batch results correctly (PB-011)
+b146aa0 chore(git): ignore local release artifacts
+d20542a fix(auth,migrations,api): remove duplicate search route and harden workflow upgrades
+681b84b chore(prescriptions): remove unreachable reject logger
+477e5a9 fix(storage): support public MinIO presigned URLs (PB-006)
+901f581 fix(prescription-workflow): resolve claim/approve crashes (PB-001, PB-007, PB-008)
+ae3cee9 feat: migrate netmeds worker to json api
+81e70c4 test: enable live netmeds validation
+63d6a3a docs: record netmeds worker migration status
+9694d05 docs: preserve netmeds api discovery artifacts
+068dfe1 Remove virtual environment from repository
+41f4e77 v4.3.2 financial engine stabilized

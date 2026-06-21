@@ -1,0 +1,34 @@
+NAME                           READY   STATUS    RESTARTS        AGE
+pod/gateway-5fbcd8d474-psspt   1/1     Running   17 (6h2m ago)   9d
+pod/postgres-9cf64c688-mlrtj   1/1     Running   17 (6h2m ago)   9d
+pod/redis-8f5bbf5d-sdxw4       1/1     Running   17 (6h2m ago)   9d
+
+NAME               TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE
+service/gateway    ClusterIP   10.43.109.55    <none>        8000/TCP   12d
+service/postgres   ClusterIP   10.43.79.206    <none>        5432/TCP   12d
+service/redis      ClusterIP   10.43.230.197   <none>        6379/TCP   12d
+
+NAME                               READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/gateway            1/1     1            1           12d
+deployment.apps/postgres           1/1     1            1           12d
+deployment.apps/redis              1/1     1            1           12d
+deployment.apps/worker-netmeds     0/0     0            0           9d
+deployment.apps/worker-pharmeasy   0/0     0            0           9d
+
+NAME                                          DESIRED   CURRENT   READY   AGE
+replicaset.apps/gateway-57dc75f5f6            0         0         0       9d
+replicaset.apps/gateway-5fbcd8d474            1         1         1       9d
+replicaset.apps/gateway-6bf76cf64c            0         0         0       9d
+replicaset.apps/gateway-74898988c4            0         0         0       9d
+replicaset.apps/gateway-7855947857            0         0         0       9d
+replicaset.apps/gateway-c54d955d9             0         0         0       9d
+replicaset.apps/postgres-9cf64c688            1         1         1       12d
+replicaset.apps/redis-8f5bbf5d                1         1         1       12d
+replicaset.apps/worker-netmeds-5d8f846fb6     0         0         0       9d
+replicaset.apps/worker-netmeds-66458fd6f      0         0         0       9d
+replicaset.apps/worker-netmeds-7587bbd5b8     0         0         0       9d
+replicaset.apps/worker-netmeds-7f7b6f88c5     0         0         0       9d
+replicaset.apps/worker-pharmeasy-5b86c4955b   0         0         0       9d
+replicaset.apps/worker-pharmeasy-76c75cd865   0         0         0       9d
+replicaset.apps/worker-pharmeasy-848469b6d6   0         0         0       9d
+replicaset.apps/worker-pharmeasy-f7f8ccb75    0         0         0       9d
